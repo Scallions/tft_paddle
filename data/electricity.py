@@ -21,7 +21,7 @@ entity specific z-score normalization.
 """
 
 import data.base
-import data.utils as utils
+import utils.utils as utils
 import pandas as pd
 import sklearn.preprocessing
 
@@ -259,3 +259,6 @@ class ElectricityFormatter(GenericDataFormatter):
       Tuple of (training samples, validation samples)
     """
     return 450000, 50000
+
+def create_dataformer():
+  return ElectricityFormatter()
