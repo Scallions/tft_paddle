@@ -16,7 +16,15 @@ class QuantileLoss(nn.Layer):
         losses = []
         for i, q in enumerate(self.quantiles):
             errors = target - preds[:,i]
-            losses.append(paddle.max((q-1) * errors,q * errors).unsqueeze(1))
+            left = (q-1) * errors 
+            right = q * errors 
+            mask = left > right
+            nmask = left <= right
+            loss_temp = paddle.zeros_like(errors)
+            loss_temp = loss_temp + left*mask
+            loss_temp = loss_temp + right*nmask
+            losses.append(loss_temp.unsqueeze(1))
+            # losses.append(paddle.max((q-1) * errors,q * errors).unsqueeze(1))
         loss = paddle.mean(paddle.sum(paddle.concat(losses,axis=1),axis=1))
         return loss
 

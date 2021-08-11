@@ -113,5 +113,6 @@ def create_dataloader(configs, data):
         batch_size=configs["batch_size"],
         shuffle=True,
         num_workers=2,
+        drop_last=True,
     )
     return dataloader
