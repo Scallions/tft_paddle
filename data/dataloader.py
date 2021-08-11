@@ -1,6 +1,7 @@
 from paddle.io import Dataset, DataLoader
 import numpy as np
 import pandas as pd
+from data.electricity import create_dataformer
 
 class TSDataset(Dataset):
     def __init__(self,id_col, static_cols, time_col, input_cols,
@@ -75,20 +76,42 @@ class TSDataset(Dataset):
     def __len__(self):
         return self.inputs.shape[0]
 
+def load_data():
+    data_csv_path = "dataset/LD2011_2014.csv"
 
-def create_dataset(configs):
+    raw_data = pd.read_csv(data_csv_path, index_col=0)
+    # print(raw_data.head())
+    dataformer = create_dataformer()
+    train, valid, test = dataformer.split_data(raw_data)
+    return train, valid, test
+
+def create_dataset(configs, data):
     # process configs
+    id_col = 'categorical_id'
+    time_col='hours_from_start'
+    static_cols = []
+    num_static = 0
+    input_cols =['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
+    target_col = 'power_usage'
+    time_steps=192
+    num_encoder_steps = 168
+    output_size = 1
+    max_samples = 1000
+    input_size = 5
 
-    return TSDataset()
+    return TSDataset(id_col, static_cols, time_col, input_cols,
+                      target_col, time_steps, max_samples,
+                     input_size, num_encoder_steps, num_static, output_size, data)
 
-def create_dataloader(configs):
+def create_dataloader(configs, data):
     # process configs
 
     # create dataset
-    dataset = create_dataset(configs)
+    dataset = create_dataset(configs, data)
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=6,
         shuffle=True,
         num_workers=2,
     )
+    return dataloader

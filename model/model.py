@@ -1,10 +1,9 @@
 import math
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
-from paddle.io import DataLoader,Dataset
-from paddle.vision import transforms
-import ipdb
+# import paddle.nn.functional as F
+# from paddle.io import DataLoader,Dataset
+# from paddle.vision import transforms
 
 class QuantileLoss(nn.Layer):
     def __init__(self,quantiles):
@@ -86,7 +85,7 @@ class GatedResidualNetwork(nn.Layer):
         self.elu2 = nn.ELU()
 
         self.dropout = nn.Dropout(self.dropout)
-        self.bn = TimeDistributed(nn.BatchNorm1d(self.output_size), batch_first=batch_first)
+        self.bn = TimeDistributed(nn.BatchNorm1D(self.output_size), batch_first=batch_first)
         self.gate = TimeDistributed(GLU(self.output_size), batch_first=batch_first)
 
     def forward(self, x, context=None):
@@ -249,20 +248,20 @@ class TFT(nn.Layer):
                                     dropout=config['dropout'])
 
         self.post_lstm_gate = TimeDistributed(GLU(self.hidden_size))
-        self.post_lstm_norm = TimeDistributed(nn.BatchNorm1d(self.hidden_size))
+        self.post_lstm_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size))
 
         self.static_enrichment = GatedResidualNetwork(self.hidden_size, self.hidden_size, self.hidden_size,
                                                       self.dropout, config['embedding_dim'] * self.static_variables)
 
         self.position_encoding = PositionalEncoder(self.hidden_size, self.seq_length)
 
-        self.multihead_attn = nn.MultiheadAttention(self.hidden_size, self.attn_heads)
+        self.multihead_attn = nn.MultiHeadAttention(self.hidden_size, self.attn_heads)
         self.post_attn_gate = TimeDistributed(GLU(self.hidden_size))
 
-        self.post_attn_norm = TimeDistributed(nn.BatchNorm1d(self.hidden_size, self.hidden_size))
+        self.post_attn_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size, self.hidden_size))
         self.pos_wise_ff = GatedResidualNetwork(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout)
 
-        self.pre_output_norm = TimeDistributed(nn.BatchNorm1d(self.hidden_size, self.hidden_size))
+        self.pre_output_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size, self.hidden_size))
         self.pre_output_gate = TimeDistributed(GLU(self.hidden_size))
 
         self.output_layer = TimeDistributed(nn.Linear(self.hidden_size, self.num_quantiles), batch_first=True)
@@ -397,6 +396,9 @@ class TFT(nn.Layer):
 
         return output, encoder_output, decoder_output, attn_output, attn_output_weights, encoder_sparse_weights, decoder_sparse_weights
 
+
+def create_model(configs):
+    return TFT(config=configs)
 
 if __name__ == '__main__':
     static_cols = ['meter']
