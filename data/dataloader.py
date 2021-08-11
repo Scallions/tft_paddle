@@ -65,18 +65,18 @@ class TSDataset(Dataset):
     
     def __getitem__(self, index):
         s = {
-        'inputs': self.inputs[index],
-        'outputs': self.outputs[index, self.num_encoder_steps:, :],
+        'inputs': self.inputs[index].astype('float32'),
+        'outputs': self.outputs[index, self.num_encoder_steps:, :].astype('float32'),
         'active_entries': np.ones_like(self.outputs[index, self.num_encoder_steps:, :]),
         'time': self.time[index],
-        'identifier': self.identifiers[index]
+        'identifier': self.identifiers[index].astype('float32')
         }
         return s
 
     def __len__(self):
         return self.inputs.shape[0]
 
-def load_data():
+def load_data(configs):
     data_csv_path = "dataset/LD2011_2014.csv"
 
     raw_data = pd.read_csv(data_csv_path, index_col=0)
@@ -89,12 +89,12 @@ def create_dataset(configs, data):
     # process configs
     id_col = 'categorical_id'
     time_col='hours_from_start'
-    static_cols = []
-    num_static = 0
+    static_cols = ['categorical_id']
+    num_static = 1
     input_cols =['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
     target_col = 'power_usage'
-    time_steps=192
-    num_encoder_steps = 168
+    time_steps=configs['seq_length']
+    num_encoder_steps = 64
     output_size = 1
     max_samples = 1000
     input_size = 5
@@ -110,7 +110,7 @@ def create_dataloader(configs, data):
     dataset = create_dataset(configs, data)
     dataloader = DataLoader(
         dataset=dataset,
-        batch_size=6,
+        batch_size=configs["batch_size"],
         shuffle=True,
         num_workers=2,
     )
