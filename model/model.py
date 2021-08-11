@@ -29,6 +29,20 @@ class Embedding(nn.Layer):
     def forward(self, x):
         return self.emb(x.astype('int64'))
 
+
+class LSTM(nn.Layer):
+    def __init__(self, input_size, hidden_size, num_layers, dropout):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, dropout=dropout)
+
+    def forward(self, x, hs):
+        # x: b, t, l
+        x = paddle.transpose(x, [1,0,2])
+        x, (h, c) = self.lstm(x, hs)
+        x = paddle.transpose(x, [1,0,2])
+        return x, (h, c)
+
+
 class TimeDistributed(nn.Layer):
     ## Takes any module and stacks the time dimension with the batch dimenison of inputs before apply the module
     ## From: https://discuss.pytorch.org/t/any-pytorch-function-can-work-as-keras-timedistributed/1346/4
@@ -246,12 +260,12 @@ class TFT(nn.Layer):
                                                                   config['time_varying_categoical_variables'] +
                                                                   config['static_variables'])
 
-        self.lstm_encoder = nn.LSTM(input_size=self.hidden_size,
+        self.lstm_encoder = LSTM(input_size=self.hidden_size,
                                     hidden_size=self.hidden_size,
                                     num_layers=self.lstm_layers,
                                     dropout=config['dropout'])
 
-        self.lstm_decoder = nn.LSTM(input_size=self.hidden_size,
+        self.lstm_decoder = LSTM(input_size=self.hidden_size,
                                     hidden_size=self.hidden_size,
                                     num_layers=self.lstm_layers,
                                     dropout=config['dropout'])
@@ -264,7 +278,7 @@ class TFT(nn.Layer):
 
         self.position_encoding = PositionalEncoder(self.hidden_size, self.seq_length)
 
-        self.multihead_attn = nn.MultiHeadAttention(self.hidden_size, self.attn_heads)
+        self.multihead_attn = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, need_weights=True)
         self.post_attn_gate = TimeDistributed(GLU(self.hidden_size))
 
         self.post_attn_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size, self.hidden_size))
@@ -386,10 +400,13 @@ class TFT(nn.Layer):
 
         ##Attention
         ## Pytorch Q(L,N,E) but in paddle Q(N,L,E)
-        attn_output, attn_output_weights = self.multihead_attn(attn_input[:self.encode_length, :, :],
-                                                               attn_input[self.encode_length:, :, :],
-                                                               attn_input[:self.encode_length, :, :])
-
+        attn_input = paddle.transpose(attn_input, [1,0,2])
+        attn_output, attn_output_weights = self.multihead_attn(attn_input[:, self.encode_length:, :],
+                                                               attn_input[:, :self.encode_length:, :],
+                                                               attn_input[:, :self.encode_length, :])
+        attn_output = paddle.transpose(attn_output, [1,0,2])
+        attn_input = paddle.transpose(attn_input, [1,0,2])
+        attn_output_weights = paddle.transpose(attn_output_weights, [0,1,3,2])
         ##skip connection over attention
         attn_output = self.post_attn_gate(attn_output) + attn_input[self.encode_length:, :, :]
         attn_output = self.post_attn_norm(attn_output)

@@ -53,8 +53,9 @@ for epoch in pbar:
     epoch_loss = [] # record loss
     ##### batch
     for batch in dataloader:
-        output, encoder_ouput, decoder_output, attn, attn_weights = tft_model(batch)
-        loss= q_loss_func(output[:,:,:].view(-1,3), batch['outputs'][:,:,0].flatten().float())
+        # output, encoder_ouput, decoder_output, attn, attn_weights = tft_model(batch)
+        output, encoder_output, decoder_putput, attn, attn_weights, _, _ = tft_model(batch)
+        loss = q_loss_func(output[:,:,:].reshape((-1,3)), batch['outputs'][:,:,0].flatten().astype('float32'))
         loss.backward()
         optimizer.step()
         epoch_loss.append(loss.item())

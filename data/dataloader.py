@@ -94,7 +94,7 @@ def create_dataset(configs, data):
     input_cols =['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
     target_col = 'power_usage'
     time_steps=configs['seq_length']
-    num_encoder_steps = 64
+    num_encoder_steps = 168
     output_size = 1
     max_samples = 1000
     input_size = 5
