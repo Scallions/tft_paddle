@@ -11,7 +11,7 @@ from loguru import logger
 pd.set_option('max_columns', 1000)
 
 ## load configs
-static_cols = []
+static_cols = ['categorical_id']
 configs = {}
 configs['static_variables'] = len(static_cols)
 configs['time_varying_categoical_variables'] = 1
@@ -30,7 +30,7 @@ configs['encode_length'] = 168
 configs['attn_heads'] = 4
 configs['num_quantiles'] = 3
 configs['vailid_quantiles'] = [0.1,0.5,0.9]
-configs['seq_length'] = 10
+configs['seq_length'] = 192
 configs['epochs'] = 10
 
 
@@ -40,7 +40,7 @@ tft_model = model.create_model(configs)
 ### load optimizer
 optimizer = utils.utils.create_optimizer(configs, tft_model)
 ### load dataloader
-train, val, test = data.load_data()
+train, val, test = data.load_data(configs)
 dataloader = data.create_dataloader(configs, train)
 ### loss func
 q_loss_func = model.QuantileLoss([0.1,0.5,0.9])

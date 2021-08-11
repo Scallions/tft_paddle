@@ -20,6 +20,15 @@ class QuantileLoss(nn.Layer):
         loss = paddle.mean(paddle.sum(paddle.concat(losses,axis=1),axis=1))
         return loss
 
+
+class Embedding(nn.Layer):
+    def __init__(self, num_embeddings, embedding_dim, padding_idx=None, sparse=False, weight_attr=None, name=None):
+        super().__init__()
+        self.emb = nn.Embedding(num_embeddings, embedding_dim, padding_idx, sparse, weight_attr, name)
+    
+    def forward(self, x):
+        return self.emb(x.astype('int64'))
+
 class TimeDistributed(nn.Layer):
     ## Takes any module and stacks the time dimension with the batch dimenison of inputs before apply the module
     ## From: https://discuss.pytorch.org/t/any-pytorch-function-can-work-as-keras-timedistributed/1346/4
@@ -58,7 +67,7 @@ class GLU(nn.Layer):
     def forward(self, x):
         sig = self.sigmoid(self.fc1(x))
         x = self.fc2(x)
-        return paddle.matmul(sig, x)
+        return paddle.multiply(sig, x)
 
 
 class GatedResidualNetwork(nn.Layer):
@@ -200,13 +209,13 @@ class TFT(nn.Layer):
 
         self.static_embedding_layers = nn.LayerList()
         for i in range(self.static_variables):
-            emb = nn.Embedding(config['static_embedding_vocab_sizes'][i], config['embedding_dim'])
+            emb = Embedding(config['static_embedding_vocab_sizes'][i], config['embedding_dim'])
             self.static_embedding_layers.append(emb)
 
         self.time_varying_embedding_layers = nn.LayerList()
         for i in range(self.time_varying_categoical_variables):
             emb = TimeDistributed(
-                nn.Embedding(config['time_varying_embedding_vocab_sizes'][i], config['embedding_dim']),
+                Embedding(config['time_varying_embedding_vocab_sizes'][i], config['embedding_dim']),
                 batch_first=True)
             self.time_varying_embedding_layers.append(emb)
 
@@ -335,7 +344,7 @@ class TFT(nn.Layer):
         embedding_vectors = []
         for i in range(self.static_variables):
             # only need static variable from the first timestep
-            emb = self.static_embedding_layers[i](x['identifier'][:, 0, i].long())
+            emb = self.static_embedding_layers[i](x['identifier'][:, 0, i])
             embedding_vectors.append(emb)
 
         ##Embedding and variable selection
@@ -357,7 +366,7 @@ class TFT(nn.Layer):
         embeddings_decoder = embeddings_decoder + pe[self.encode_length:, :, :]
 
         ##LSTM
-        lstm_input = paddle.concat([embeddings_encoder, embeddings_decoder], axis=1)
+        lstm_input = paddle.concat([embeddings_encoder, embeddings_decoder], axis=0)
         encoder_output, hidden = self.encode(embeddings_encoder)
         decoder_output, _ = self.decode(embeddings_decoder, hidden)
         lstm_output = paddle.concat([encoder_output, decoder_output], axis=0)
