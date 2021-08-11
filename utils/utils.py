@@ -19,11 +19,13 @@
 import os
 import pathlib
 import numpy as np
+import paddle
 
 
 # TODO: impl opter
-def create_optimizer(configs):
-	return None
+def create_optimizer(configs, model):
+	return paddle.optimizer.Adam(learning_rate=0.0001,
+        parameters=model.parameters())
 
 
 # Generic.
