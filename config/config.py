@@ -11,7 +11,6 @@ configs['static_embedding_vocab_sizes'] = [369]
 configs['time_varying_embedding_vocab_sizes'] = [369]
 configs['embedding_dim'] = 8
 ### lstm
-configs['encode_length'] = 168
 configs['lstm_hidden_dimension'] = 160
 configs['lstm_layers'] = 1
 configs['dropout'] = 0.05
@@ -27,7 +26,8 @@ configs['learning_rate'] = 0.001
 ## 数据集设置
 configs['data_csv_path'] = 'dataset/LD2011_2014.csv'
 configs['batch_size'] = 64
-configs['seq_length'] = 192
+configs['encode_length'] = 168 # 输入长度
+configs['seq_length'] = 192 # 输入加预测长度
 configs['id_col'] = 'categorical_id'
 configs['time_col'] ='hours_from_start'
 configs['static_cols'] = ['categorical_id']
