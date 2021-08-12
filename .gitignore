@@ -128,7 +128,10 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-
+.vscode
 
 ## dataset
 dataset
+
+## checkpoint
+experiment
