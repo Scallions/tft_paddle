@@ -77,7 +77,7 @@ class TSDataset(Dataset):
         return self.inputs.shape[0]
 
 def load_data(configs):
-    data_csv_path = "dataset/LD2011_2014.csv"
+    data_csv_path = configs['data_csv_path']
 
     raw_data = pd.read_csv(data_csv_path, index_col=0)
     # print(raw_data.head())
@@ -87,17 +87,17 @@ def load_data(configs):
 
 def create_dataset(configs, data):
     # process configs
-    id_col = 'categorical_id'
-    time_col='hours_from_start'
-    static_cols = ['categorical_id']
-    num_static = 1
-    input_cols =['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
-    target_col = 'power_usage'
-    time_steps=configs['seq_length']
-    num_encoder_steps = 168
-    output_size = 1
-    max_samples = 1000
-    input_size = 5
+    id_col = configs['id_col']
+    time_col= configs['time_col']
+    static_cols = configs['static_cols']
+    num_static = len(static_cols)
+    input_cols = configs['input_cols']
+    target_col = configs['target_col']
+    time_steps= configs['seq_length']
+    num_encoder_steps = configs['encode_length']
+    output_size = configs['output_size']
+    max_samples = configs['max_samples']
+    input_size = configs['input_size']
 
     return TSDataset(id_col, static_cols, time_col, input_cols,
                       target_col, time_steps, max_samples,
