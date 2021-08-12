@@ -283,10 +283,10 @@ class TFT(nn.Layer):
         self.multihead_attn = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, need_weights=True)
         self.post_attn_gate = TimeDistributed(GLU(self.hidden_size))
 
-        self.post_attn_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size, self.hidden_size))
+        self.post_attn_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size))
         self.pos_wise_ff = GatedResidualNetwork(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout)
 
-        self.pre_output_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size, self.hidden_size))
+        self.pre_output_norm = TimeDistributed(nn.BatchNorm1D(self.hidden_size))
         self.pre_output_gate = TimeDistributed(GLU(self.hidden_size))
 
         self.output_layer = TimeDistributed(nn.Linear(self.hidden_size, self.num_quantiles), batch_first=True)
