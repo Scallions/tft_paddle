@@ -21,8 +21,10 @@ optimizer = utils.utils.create_optimizer(configs, tft_model)
 ### load dataloader
 train, val, test = data.load_data(configs)
 dataloader = data.create_dataloader(configs, train)
+val_loader = data.create_dataloader(configs, val)
 ### loss func
 q_loss_func = model.QuantileLoss(configs['vailid_quantiles'])
+q_90_loss_func = model.QuantileLoss([0.9])
 print(len(dataloader))
 ### train step
 #### epoch
@@ -40,7 +42,11 @@ for epoch in range(configs["epochs"]):
         optimizer.clear_grad()
         epoch_loss.append(loss.item())
         if (iter+1) % 5 == 0:
-            print(f"epoch:{epoch+1} \t iter: {iter+1} \t loss:{loss.item()}")
+            for batch in val_loader:
+                output, encoder_output, decoder_putput, attn, attn_weights, _, _ = tft_model(batch)
+                loss_ = q_90_loss_func(output[:,:,:].reshape((-1,3)), batch['outputs'][:,:,0].flatten().astype('float32'))
+                break
+            print(f"epoch:{epoch+1} \t iter: {iter+1} \t loss:{loss.item()} \t val_loss:{loss_.item()}")
     losses.append(np.mean(epoch_loss))
 
 
