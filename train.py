@@ -1,13 +1,13 @@
 from data.dataloader import load_data
 import pandas as pd
+import paddle
 import numpy as np
 import utils
 import model
 import data
-from tqdm import tqdm
-from loguru import logger
 import config
-
+from utils import log_utils as logger
+from utils import paddle_utils,io_utils
 pd.set_option('max_columns', 1000)
 
 ## load configs
@@ -20,34 +20,43 @@ tft_model = model.create_model(configs)
 optimizer = utils.utils.create_optimizer(configs, tft_model)
 ### load dataloader
 train, val, test = data.load_data(configs)
-dataloader = data.create_dataloader(configs, train)
+train_loader = data.create_dataloader(configs, train)
 val_loader = data.create_dataloader(configs, val)
 ### loss func
-q_loss_func = model.QuantileLoss(configs['vailid_quantiles'])
+q_loss_func = model.QuantileLoss([0.1, 0.5, 0.9])
 q_90_loss_func = model.QuantileLoss([0.9])
-print(len(dataloader))
-### train step
-#### epoch
-losses = []
-#pbar = tqdm(range(configs["epochs"]))
+
+
+tft_model.train()
 for epoch in range(configs["epochs"]):
     epoch_loss = [] # record loss
-    ##### batch
-    for iter, batch in enumerate(dataloader):
-        # output, encoder_ouput, decoder_output, attn, attn_weights = tft_model(batch)
+    for iter, batch in enumerate(train_loader):
         output, encoder_output, decoder_putput, attn, attn_weights, _, _ = tft_model(batch)
         loss = q_loss_func(output[:,:,:].reshape((-1,3)), batch['outputs'][:,:,0].flatten().astype('float32'))
         loss.backward()
         optimizer.step()
         optimizer.clear_grad()
-        epoch_loss.append(loss.item())
         if (iter+1) % 5 == 0:
-            for batch in val_loader:
-                output, encoder_output, decoder_putput, attn, attn_weights, _, _ = tft_model(batch)
-                loss_ = q_90_loss_func(output[:,:,:].reshape((-1,3)), batch['outputs'][:,:,0].flatten().astype('float32'))
-                break
-            print(f"epoch:{epoch+1} \t iter: {iter+1} \t loss:{loss.item()} \t val_loss:{loss_.item()}")
-    losses.append(np.mean(epoch_loss))
+            msg = "[TRAIN] epoch: {}/{}, iter: {}/{},\t train_loss: {:4f}".format(epoch + 1, configs["epochs"],
+                                                                                  iter + 1,
+                                                                                  len(train_loader), loss.item())
+            logger.info(msg)
+            io_utils.write_log(msg, 'experiment/log', 'tft_model')
+        if (iter+1) % 5 == 0:
+            tft_model.eval()
+            with paddle.no_grad():
+                for val_batch in val_loader:
+                    val_output, val_encoder_output, val_decoder_putput, val_attn, val_attn_weights, _, _ = tft_model(val_batch)
+                    val_loss = q_90_loss_func(val_output[:,:,:].reshape((-1,3)), val_batch['outputs'][:,:,0].flatten().astype('float32'))
+            msg = "[EVAL] val_loss: {:4f}".format(val_loss.item())
+            logger.info(msg)
+            io_utils.write_log(msg, 'experiment/log', 'tft_model')
+        tft_model.train()
+        if (iter+1) % 5 == 0:
+            paddle_utils.save_model(tft_model,optimizer,
+                                    'experiment/save_model',epoch+1,iter+1)
+
+
 
 
 ## output results
