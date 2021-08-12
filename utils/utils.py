@@ -24,7 +24,7 @@ import paddle
 
 # TODO: impl opter
 def create_optimizer(configs, model):
-	return paddle.optimizer.Adam(learning_rate=0.0001,
+	return paddle.optimizer.Adam(learning_rate=configs['learning_rate'],
         parameters=model.parameters())
 
 
