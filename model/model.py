@@ -426,6 +426,7 @@ class TFT(nn.Layer):
 
 
 def create_model(configs):
+    from model.tft_model import TFT
     return TFT(config=configs)
 
 if __name__ == '__main__':

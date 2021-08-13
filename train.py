@@ -31,7 +31,8 @@ tft_model.train()
 for epoch in range(configs["epochs"]):
     epoch_loss = [] # record loss
     for iter, batch in enumerate(train_loader):
-        output, encoder_output, decoder_putput, attn, attn_weights, _, _ = tft_model(batch)
+        # output, encoder_output, decoder_putput, attn, attn_weights, _, _ = tft_model(batch)
+        output = tft_model(batch)
         loss = q_loss_func(output[:,:,:].reshape((-1,3)), batch['outputs'][:,:,0].flatten().astype('float32'))
         loss.backward()
         optimizer.step()
@@ -46,7 +47,8 @@ for epoch in range(configs["epochs"]):
             tft_model.eval()
             with paddle.no_grad():
                 for val_batch in val_loader:
-                    val_output, val_encoder_output, val_decoder_putput, val_attn, val_attn_weights, _, _ = tft_model(val_batch)
+                    # val_output, val_encoder_output, val_decoder_putput, val_attn, val_attn_weights, _, _ = tft_model(val_batch)
+                    val_output = tft_model(val_batch)
                     val_loss = q_90_loss_func(val_output[:,:,:].reshape((-1,3))[:,2:], val_batch['outputs'][:,:,0].flatten().astype('float32'))
             msg = "[EVAL] val_loss: {:4f}".format(val_loss.item())
             logger.info(msg)
