@@ -20,7 +20,7 @@ configs['attn_heads'] = 4
 configs['num_quantiles'] = 3
 configs['vailid_quantiles'] = [0.1, 0.5, 0.9]
 ## 训练设置
-configs['device'] = 'cpu'
+configs['device'] = 'gpu'
 configs['epochs'] = 100
 configs['learning_rate'] = 0.001
 ## 数据集设置
@@ -34,8 +34,11 @@ configs['static_cols'] = ['categorical_id']
 configs['static_variables'] = len(configs['static_cols'])
 configs['input_cols'] =['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
 configs['target_col'] = 'power_usage'
-configs['max_samples'] = 1000
+configs['max_samples'] = 500000
 
 ## 输入输出设置和数据集对应
 configs['input_size'] = 5
 configs['output_size'] = 1
+
+val_configs = configs.copy()
+val_configs['max_samples'] = 50000
