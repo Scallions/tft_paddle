@@ -12,6 +12,7 @@ pd.set_option('max_columns', 1000)
 
 ## load configs
 configs = config.configs
+val_configs = config.valconfigs
 
 ## train
 ### load model
@@ -37,24 +38,26 @@ for epoch in range(configs["epochs"]):
         loss.backward()
         optimizer.step()
         optimizer.clear_grad()
-        if (iter+1) % 5 == 0:
+        if (iter+1) % 100 == 0:
             msg = "[TRAIN] epoch: {}/{}, iter: {}/{},\t train_loss: {:4f}".format(epoch + 1, configs["epochs"],
                                                                                   iter + 1,
                                                                                   len(train_loader), loss.item())
             logger.info(msg)
             io_utils.write_log(msg, 'experiment/log', 'tft_model')
-        if (iter+1) % 5 == 0:
+        if (iter+1) % len(train_loader) == 0:
             tft_model.eval()
+            val_losses = []
             with paddle.no_grad():
                 for val_batch in val_loader:
                     # val_output, val_encoder_output, val_decoder_putput, val_attn, val_attn_weights, _, _ = tft_model(val_batch)
                     val_output = tft_model(val_batch)
-                    val_loss = q_90_loss_func(val_output[:,:,:].reshape((-1,3))[:,2:], val_batch['outputs'][:,:,0].flatten().astype('float32'))
-            msg = "[EVAL] val_loss: {:4f}".format(val_loss.item())
+                    val_loss = q_90_loss_func(val_output[:,:,:].reshape((-1,3))[:,2:], val_batch['outputs'][:,:,0].flatten().astype('float32')) / batch['outputs'].abs().mean()
+                    val_losses.append(val_loss.item())
+            msg = "[EVAL] val_loss: {:4f}".format(np.mean(val_losses))
             logger.info(msg)
             io_utils.write_log(msg, 'experiment/log', 'tft_model')
         tft_model.train()
-        if (iter+1) % 5 == 0:
+        if (iter+1) % len(train_loader) == 0:
             paddle_utils.save_model(tft_model,optimizer,
                                     'experiment/save_model',epoch+1,iter+1)
 
