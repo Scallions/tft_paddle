@@ -51,7 +51,7 @@ def resume(model, optimizer, resume_model):
         
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
-    def __init__(self,save_dir,epoch,iters, patience=7, verbose=False, delta=0):
+    def __init__(self,save_dir, patience=7, verbose=False, delta=0):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
@@ -62,8 +62,6 @@ class EarlyStopping:
                             Default: 0
         """
         self.save_dir = save_dir
-        self.epoch = epoch
-        self.iters = iters
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -89,9 +87,9 @@ class EarlyStopping:
             self.save_model(model,optimizer,self.save_dir,self.epoch,self.iters)	
             self.counter = 0
 
-    def save_checkpoint(self, val_loss, model):
+    def save_checkpoint(self, val_loss, model,epoch,iters):
         '''Saves model when validation loss decrease.'''
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        save_model(model,optimizer,self.save_dir,self.epoch,self.iters)	# 这里会存储迄今最优模型的参数
+        save_model(model,optimizer,self.save_dir,epoch,iters)	# 这里会存储迄今最优模型的参数
         self.val_loss_min = val_loss
