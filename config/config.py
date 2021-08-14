@@ -3,6 +3,7 @@
 configs = {}
 ## 网络设置
 configs['time_varying_categoical_variables'] = 1
+configs['time_varying_reategoical_variables'] = 1
 configs['time_varying_real_variables_encoder'] = 4
 configs['time_varying_real_variables_decoder'] = 3
 configs['num_masked_series'] = 1
@@ -13,7 +14,7 @@ configs['embedding_dim'] = 8
 ### lstm
 configs['lstm_hidden_dimension'] = 160
 configs['lstm_layers'] = 1
-configs['dropout'] = 0.05
+configs['dropout'] = 0.1
 ### attention
 configs['attn_heads'] = 4
 ### qloss
@@ -34,7 +35,7 @@ configs['static_cols'] = ['categorical_id']
 configs['static_variables'] = len(configs['static_cols'])
 configs['input_cols'] =['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
 configs['target_col'] = 'power_usage'
-configs['max_samples'] = 500000
+configs['max_samples'] = 450000
 
 ## 输入输出设置和数据集对应
 configs['input_size'] = 5

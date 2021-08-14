@@ -62,7 +62,7 @@ class ElectricityFormatter(GenericDataFormatter):
     self._num_classes_per_cat_input = None
     self._time_steps = self.get_fixed_params()['total_time_steps']
 
-  def split_data(self, df, valid_boundary=None, test_boundary=None):
+  def split_data(self, df, valid_boundary=1315, test_boundary=1339):
     """Splits data frame into training-validation-test data frames.
 
     This also calibrates scaling object, and transforms data for each split.
@@ -78,9 +78,9 @@ class ElectricityFormatter(GenericDataFormatter):
 
     print('Formatting train-valid-test splits.')
     index = df['days_from_start']
-    if valid_boundary is None:
-      valid_boundary = index.quantile(0.7)
-      test_boundary = index.quantile(0.9)
+    # if valid_boundary is None:
+    #   valid_boundary = index.quantile(0.7)
+    #   test_boundary = index.quantile(0.9)
     train = df.loc[index < valid_boundary]
     valid = df.loc[(index >= valid_boundary - 7) & (index < test_boundary)]
     test = df.loc[index >= test_boundary - 7]

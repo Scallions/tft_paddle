@@ -12,7 +12,7 @@ pd.set_option('max_columns', 1000)
 
 ## load configs
 configs = config.configs
-val_configs = config.valconfigs
+val_configs = config.val_configs
 
 ## train
 ### load model
@@ -22,7 +22,7 @@ optimizer = utils.utils.create_optimizer(configs, tft_model)
 ### load dataloader
 train, val, test = data.load_data(configs)
 train_loader = data.create_dataloader(configs, train)
-val_loader = data.create_dataloader(configs, val)
+val_loader = data.create_dataloader(val_configs, val)
 ### loss func
 q_loss_func = model.QuantileLoss([0.1, 0.5, 0.9])
 q_90_loss_func = model.QuantileLoss([0.9])
@@ -44,7 +44,7 @@ for epoch in range(configs["epochs"]):
                                                                                   len(train_loader), loss.item())
             logger.info(msg)
             io_utils.write_log(msg, 'experiment/log', 'tft_model')
-        if (iter+1) % len(train_loader) == 0:
+        if (iter+1) % 200 == 0:
             tft_model.eval()
             val_losses = []
             with paddle.no_grad():

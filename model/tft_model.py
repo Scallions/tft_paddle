@@ -180,19 +180,20 @@ class TimeVariableSelectionNetwork(nn.Layer):
         self.flatten = nn.Flatten()
         if self.context is not None:
             self.flattened_grn = GRN(self.embedding_dim * self.input_nums, self.input_nums,
-                                                      self.hidden_size, self.dropout, self.context)
+                                                      self.hidden_size, self.dropout,True, self.context)
         else:
             self.flattened_grn = GRN(self.embedding_dim * self.input_nums, self.input_nums,
-                                                      self.hidden_size, self.dropout)
+                                                      self.hidden_size, self.dropout, True)
         self.single_variable_grns = nn.LayerList()
         for i in range(self.input_nums):
             self.single_variable_grns.append(
-                GRN(self.embedding_dim, self.hidden_size, self.hidden_size, self.dropout))
+                GRN(self.embedding_dim, self.hidden_size, self.hidden_size, self.dropout, True))
         self.softmax = nn.Softmax()
 
     def forward(self, embedding, context=None):
         # flatten = self.flatten(embedding)
         flatten = embedding.reshape([-1, self.time_steps, self.embedding_dim * self.input_nums])
+        context = context.unsqueeze(1)
         if context is not None:
             mlp_outputs = self.flattened_grn(flatten, context)
         else:
@@ -218,12 +219,11 @@ class TFT(nn.Layer):
         self.time_varying_real_variables_encoder = config['time_varying_real_variables_encoder']
         self.time_varying_real_variables_decoder = config['time_varying_real_variables_decoder']
         self.static_variables = config['static_variables']
-        
-        # relevant indices
-        self._input_obs_loc = [0]
-        self._static_input_loc = [4]
-        self._known_regular_input_idx = [0]
-        self._known_categorical_input_idx = [1,2,3,4]
+        self.input_obs_loc = [0]
+        self.static_loc = [4]
+        self.cat_counts = [369]
+        self.know_reg = [1,2,3]
+        self.know_cat = [0]
 
         # network params
         self.batch_size = config['batch_size']
@@ -242,29 +242,29 @@ class TFT(nn.Layer):
         ## init embddings
         ### cat emb
         self.cat_embeddings = nn.LayerList()
-        for i in range(self.time_varying_categoical_variables):
-            emb = Embedding(config['time_varying_embedding_vocab_sizes'][i], config['embedding_dim'])
+        for i in range(len(self.cat_counts)):
+            emb = Embedding(self.cat_counts[i], self.hidden_size)
             self.cat_embeddings.append(emb)
         ### sta emb
         self.static_embedding_layers = nn.LayerList()
         for i in range(self.static_variables):
-            emb = Embedding(config['static_embedding_vocab_sizes'][i], config['embedding_dim'])
+            emb = Linear(1, self.hidden_size)
             self.static_embedding_layers.append(emb)
         ### real emb
-        self.time_varying_linear_layers = nn.LayerList()
-        for i in range(self.time_varying_real_variables_encoder):
-            emb = TimeDistributed(nn.Linear(1, config['embedding_dim']), batch_first=True)
-            self.time_varying_linear_layers.append(emb)
+        self.reg_embedding_layers = nn.LayerList()
+        for i in range(self.input_size - len(self.cat_counts)):
+            emb = TimeDistributed(nn.Linear(1, self.hidden_size))
+            self.reg_embedding_layers.append(emb)
+        ### TODO: cal inps size
         ### static variable select
-        self.static_select = StaticVariableSelectionNetwork(self.embedding_dim, self.static_variables, self.hidden_size, self.dropout)
+        self.static_select = StaticVariableSelectionNetwork(self.hidden_size, self.static_variables, self.hidden_size, self.dropout)
         self.static_grn1 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         self.static_grn2 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         self.static_grn3 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         self.static_grn4 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         ### hisotry and feature select
-        # TODO: ctx
-        self.hsitory_select = TimeVariableSelectionNetwork(self.encode_length, self.embedding_dim, 5, self.hidden_size, self.dropout, self.static_variables*self.hidden_size)
-        self.feature_sleect = TimeVariableSelectionNetwork(self.seq_length-self.encode_length, self.embedding_dim, 4, self.hidden_size, self.dropout,self.static_variables*self.hidden_size)
+        self.hsitory_select = TimeVariableSelectionNetwork(self.encode_length, self.hidden_size, 4, self.hidden_size, self.dropout, self.static_variables*self.hidden_size)
+        self.feature_sleect = TimeVariableSelectionNetwork(self.seq_length-self.encode_length, self.hidden_size, 3, self.hidden_size, self.dropout,self.static_variables*self.hidden_size)
         ### hsitory and feature lstm
         self.hsitory_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False)
         self.feature_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False)
@@ -272,7 +272,6 @@ class TFT(nn.Layer):
         self.lstm_glu = GLU(self.hidden_size, self.hidden_size, self.dropout)
         self.lstm_add_norm = Add_Norm(self.hidden_size)
         ### static encrichemtn 
-        # TODO: ctx
         self.static_enh_grn = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, True, add_ctx=self.static_variables*self.hidden_size)
         ### atten
         self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
@@ -287,11 +286,11 @@ class TFT(nn.Layer):
 
     def forward(self, x):
         inputs = x['inputs'] # b t l
-        num_reg = inputs.shape[-1] - self.time_varying_categoical_variables # 标量变量数
-        num_cat = self.time_varying_categoical_variables # 类型变量数
-        num_sta = self.static_variables # 统计变量数
-        reg_inps = inputs[:,:,:num_reg] # b t l
-        cat_inps = inputs[:,:,num_reg:] # b t l
+        num_cat = len(self.cat_counts) # 类型变量数 1 
+        num_reg = self.input_size - num_cat # 标量变量数 4
+        num_sta = self.static_variables # 统计变量数 1
+        reg_inps = inputs[:,:,:num_reg] # b t l   b 192 4
+        cat_inps = inputs[:,:,num_reg:] # b t l   b 192 1
         ## embedding inputs
         ### cat emb
         emb_cat_inps = [
@@ -299,42 +298,58 @@ class TFT(nn.Layer):
             for i in range(num_cat)
         ]
         ### sta emb
-        sta_inps = []
-        # TODO: static 
-        for i in range(self.static_variables):
-            # only need static variable from the first timestep
-            emb = self.static_embedding_layers[i](x['identifier'][:, 0, i])
-            sta_inps.append(emb)
+        sta_inps = [ self.static_embedding_layers[i](x['identifier'][:, 0, i]) for i in range(num_reg) if i in self.static_loc] \
+             + [ emb_cat_inps[i][:,0,:] for i in range(num_cat) if i+num_reg in self.static_loc]
         sta_inps = paddle.stack(sta_inps, axis=1) # b l d
-        if len(sta_inps.shape) == 2:
-            sta_inps.unsqueeze_(1)
-        # for i in range(self.static_variables):
-        #     # only need static variable from the first timestep
-        #     emb = self.static_embedding_layers[i](x['identifier'][:, 0, i])
-        #     embedding_vectors.append(emb)
-        # sta_inps = paddle.concat(embedding_vectors, axis=1)
         obs_inps = [
-            self.time_varying_linear_layers[i](reg_inps[:,:,i:i+1])
-            for i in range(num_reg)
+            self.reg_embedding_layers[i](reg_inps[:,:,i:i+1])
+            for i in self.input_obs_loc
         ]
         obs_inps = paddle.stack(obs_inps, axis=-1) # B T D L
         ### split unkown inp, kown inp
-        # TODO: 处理
-        unknow_inps = obs_inps[:,:,:,:1]
-        know_reg_inps = obs_inps[:,:,:,1:]
-        know_cat_inps = emb_cat_inps[0].unsqueeze(-1)
-        know_inps = paddle.concat([know_reg_inps, know_cat_inps], axis=-1)
+        wired_embeddings = []
+        for i in range(num_cat):
+            if i not in self.know_cat \
+                and  i + num_reg  not in self.input_obs_loc:
+                # e = self.cat_embeddings[i](cat_inps[:, :, i])
+                e = emb_cat_inps[:,:,i]
+                wired_embeddings.append(e)
+
+        unknow_inps = []
+        for i in range(reg_inps.shape[-1]):
+            if i not in self.know_reg \
+                and i not in self.input_obs_loc:
+                e = self.reg_embedding_layers[i](reg_inps[:,:, i:i + 1])
+                unknow_inps.append(e)
+        if unknow_inps + wired_embeddings:
+            unknow_inps = paddle.stack(
+                unknow_inps + wired_embeddings, axis=-1)
+        else:
+            unknow_inps = None
+        # A priori known inputs
+        known_regular_inputs = [
+            self.reg_embedding_layers[i](reg_inps[:,:, i:i + 1])
+            for i in self.know_reg
+            if i not in self.static_loc
+        ]
+        known_categorical_inputs = [
+            emb_cat_inps[i]
+            for i in self.know_cat
+            if i + num_reg not in self.static_loc
+        ]
+        know_inps = paddle.stack(known_regular_inputs + known_categorical_inputs, axis=-1)
+
 
         if unknow_inps is None:
             history_inps = paddle.concat([
                 know_inps[:,:self.encode_length, :],
-                # obs_inps[:,:self.encode_length,:]
+                obs_inps[:,:self.encode_length,:]
                 ], axis=-1)
         else:
             history_inps = paddle.concat([
                 unknow_inps[:, :self.encode_length, :],
                 know_inps[:,:self.encode_length, :],
-                # obs_inps[:,:self.encode_length,:]
+                obs_inps[:,:self.encode_length,:]
                 ], axis=-1)
         
         future_inps = know_inps[:, self.encode_length:, :]
@@ -364,7 +379,6 @@ class TFT(nn.Layer):
         ## apply gated skip connection
         lstm_layer = paddle.concat([history_lstm, future_lstm], axis=1) # B T H
         lstm_layer = self.lstm_glu(lstm_layer)
-        lstm_layer = paddle.concat([history_lstm, future_lstm], axis=1)
         input_embeddings = paddle.concat([historical_features, future_features], axis=1)
         temporal_feature_layer = self.lstm_add_norm(lstm_layer, input_embeddings)
 
