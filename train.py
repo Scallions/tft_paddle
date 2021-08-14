@@ -10,6 +10,11 @@ from utils import log_utils as logger
 from utils import paddle_utils,io_utils
 pd.set_option('max_columns', 1000)
 
+## seed
+seed = 4
+paddle.seed(seed)
+np.random.seed(seed)
+
 ## load configs
 configs = config.configs
 val_configs = config.val_configs

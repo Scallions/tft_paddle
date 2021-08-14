@@ -20,7 +20,7 @@ val_configs = config.val_configs
 ### load model
 tft_model = model.create_model(configs)
 optimizer = utils.utils.create_optimizer(configs, tft_model)
-paddle_utils.resume(tft_model, optimizer,"experiment/save_model/epoch_10_iter_7812/")
+paddle_utils.resume(tft_model, optimizer,"experiment/save_model/epoch_3_iter_1757/")
 ### load dataloader
 train, val, test = data.load_data(configs)
 val_loader = data.create_dataloader(val_configs, val)
