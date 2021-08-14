@@ -6,9 +6,9 @@ from utils.io_utils import create_dir
 from utils import log_utils as logger
 
 
-def save_model(model,optimizer,save_dir,epoch,iter,keep_checkpoint_max=5):
+def save_model(model,optimizer,save_dir,epoch,iters):
     create_dir(save_dir)
-    current_save_dir = os.path.join(save_dir,"epoch_{}_iter_{}".format(epoch,iter))
+    current_save_dir = os.path.join(save_dir,"epoch_{}_iter_{}".format(epoch,iters))
     nranks = paddle.distributed.ParallelEnv().nranks
     create_dir(current_save_dir)
 
@@ -23,11 +23,8 @@ def save_model(model,optimizer,save_dir,epoch,iter,keep_checkpoint_max=5):
     paddle.save(optimizer.state_dict(),
                 os.path.join(current_save_dir, 'model.pdopt'))
 
-    save_models = deque()
-    save_models.append(current_save_dir)
-    # if len(save_models) > keep_checkpoint_max > 0:
-    #     model_to_remove = save_models.popleft()
-    #     shutil.rmtree(model_to_remove)
+
+
 
 def resume(model, optimizer, resume_model):
     if resume_model is not None:
@@ -50,3 +47,49 @@ def resume(model, optimizer, resume_model):
                 format(resume_model))
     else:
         logger.info('No model needed to resume.')
+
+        
+class EarlyStopping:
+    """Early stops the training if validation loss doesn't improve after a given patience."""
+    def __init__(self,save_dir, patience=7, verbose=False, delta=0):
+        """
+        Args:
+            patience (int): How long to wait after last time validation loss improved.
+                            Default: 7
+            verbose (bool): If True, prints a message for each validation loss improvement. 
+                            Default: False
+            delta (float): Minimum change in the monitored quantity to qualify as an improvement.
+                            Default: 0
+        """
+        self.save_dir = save_dir
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = np.Inf
+        self.delta = delta
+
+    def __call__(self, val_loss, model):
+
+        score = -val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_model(model,optimizer,self.save_dir,self.epoch,self.iters)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_model(model,optimizer,self.save_dir,self.epoch,self.iters)	
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model,epoch,iters):
+        '''Saves model when validation loss decrease.'''
+        if self.verbose:
+            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+        save_model(model,optimizer,self.save_dir,epoch,iters)	# 这里会存储迄今最优模型的参数
+        self.val_loss_min = val_loss
