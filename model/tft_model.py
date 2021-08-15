@@ -48,7 +48,120 @@ class RealEmbedding(nn.Layer):
 
     def forward(self, x):
         return self.layer(x)
-        
+
+
+class ScaledDotProductAttention(nn.Layer):
+    """Defines scaled dot product attention layer.
+        Attributes:
+        dropout: Dropout rate to use
+        activation: Normalisation function for scaled dot product attention (e.g.
+            softmax by default)
+    """
+
+    def __init__(self, attn_dropout=0.0):
+        super().__init__()
+        self.dropout = nn.Dropout(attn_dropout)
+        self.activation = nn.Softmax()
+
+    def forward(self, q, k, v, mask):
+        """Applies scaled dot product attention.
+        Args:
+            q: Queries
+            k: Keys
+            v: Values
+            mask: Masking if required -- sets softmax to very large value
+        Returns:
+            Tuple of (layer outputs, attention weights)
+        """
+        attn = paddle.bmm(q,k.transpose([0,2,1])) # shape=(batch, q, k)
+        if mask is not None:
+            # attn = attn.masked_fill(mask.bool(), -1e9)
+            fill = -1e9 * mask
+            fmask = -1 * (mask - 1)
+            attn = fmask * attn + fill
+            # attn = paddle.masked_selet(attn, mask.bool())
+
+        attn = self.activation(attn)
+        attn = self.dropout(attn)
+        output = paddle.bmm(attn,v)
+        return output, attn
+
+class InterpretableMultiHeadAttention(nn.Layer):
+    """Defines interpretable multi-head attention layer.
+    Attributes:
+      n_head: Number of heads
+      d_k: Key/query dimensionality per head
+      d_v: Value dimensionality
+      dropout: Dropout rate to apply
+      qs_layers: List of queries across heads
+      ks_layers: List of keys across heads
+      vs_layers: List of values across heads
+      attention: Scaled dot product attention layer
+      w_o: Output weight matrix to project internal state to the original TFT
+        state size
+    """
+
+    def __init__(self, n_head, d_model, dropout_rate):
+        """Initialises layer.
+        Args:
+          n_head: Number of heads
+          d_model: TFT state dimensionality
+          dropout: Dropout discard rate
+        """
+        super().__init__()
+
+        self.n_head = n_head
+        self.d_k = self.d_v = d_k = d_v = d_model // n_head
+        self.dropout = nn.Dropout(dropout_rate)
+
+        self.qs_layers = nn.LayerList()
+        self.ks_layers = nn.LayerList()
+        self.vs_layers = nn.LayerList()
+
+        # Use same value layer to facilitate interp
+        vs_layer = nn.Linear(d_model, d_v)
+        qs_layer = nn.Linear(d_model, d_k)
+        ks_layer = nn.Linear(d_model, d_k)
+
+        for _ in range(n_head):
+            self.qs_layers.append(qs_layer)
+            self.ks_layers.append(ks_layer)
+            self.vs_layers.append(vs_layer)  # use same vs_layer
+
+        self.attention = ScaledDotProductAttention()
+        self.w_o = nn.Linear(self.d_k, d_model)
+
+    def forward(self, q, k, v, attn_mask=None):
+        """Applies interpretable multihead attention.
+          Using T to denote the number of time steps fed into the transformer.
+          Args:
+            q: Query tensor of shape=(?, T, d_model)
+            k: Key of shape=(?, T, d_model)
+            v: Values of shape=(?, T, d_model)
+            mask: Masking if required with shape=(?, T, T)
+          Returns:
+            Tuple of (layer outputs, attention weights)
+          """
+        n_head = self.n_head
+        heads = []
+        attns = []
+        for i in range(n_head):
+            qs = self.qs_layers[i](q)
+            ks = self.ks_layers[i](k)
+            vs = self.vs_layers[i](v)
+            head, attn = self.attention(qs, ks, vs, attn_mask)
+
+            head_dropout = self.dropout(head)
+            heads.append(head_dropout)
+            attns.append(attn)
+        head = paddle.stack(heads) if n_head > 1 else heads[0]
+        attn = paddle.stack(attns)
+
+        outputs = paddle.mean(head, axis=0) if n_head > 1 else head
+        outputs = self.w_o(outputs)
+        outputs = self.dropout(outputs)  # output dropout
+
+        return outputs, attn
 
 class Linear(nn.Layer):
     def __init__(self, inp_size, out_size, use_td=False):
@@ -274,7 +387,8 @@ class TFT(nn.Layer):
         ### static encrichemtn 
         self.static_enh_grn = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, True, add_ctx=self.static_variables*self.hidden_size)
         ### atten
-        self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
+        self.attn_layer = InterpretableMultiHeadAttention(self.attn_heads, self.hidden_size, dropout_rate=self.dropout)
+        # self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
         self.attn_glu = GLU(self.hidden_size, self.hidden_size)
         self.attn_add_norm = Add_Norm(self.hidden_size)
         ## position wise feed-forward
@@ -390,7 +504,7 @@ class TFT(nn.Layer):
         ### decoder self attention
         # mask = get_decoder_mask(enriched)
         mask = paddle.cumsum(paddle.eye(enriched.shape[1]), 1)
-        x = self.attn_layer(enriched, enriched, enriched,
+        x, _ = self.attn_layer(enriched, enriched, enriched,
                           attn_mask=mask)
         x = self.attn_glu(x)
         x = self.attn_add_norm(x, enriched)
