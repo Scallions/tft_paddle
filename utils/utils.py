@@ -24,9 +24,12 @@ import paddle
 
 # TODO: impl opter
 def create_optimizer(configs, model):
-  # clip = paddle.nn.ClipGradByGlobalNorm(clip_norm=0.01)
+  clip = paddle.nn.ClipGradByGlobalNorm(clip_norm=0.001)
   return paddle.optimizer.Adam(learning_rate=configs['learning_rate'],
-        parameters=model.parameters())#, grad_clip=clip)
+        parameters=model.parameters(),
+        # weight_decay = 0.01,
+        grad_clip=clip
+        )
 
 
 # Generic.

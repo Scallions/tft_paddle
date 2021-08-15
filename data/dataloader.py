@@ -105,9 +105,15 @@ def create_dataset(configs, data):
 
 def create_dataloader(configs, data):
     # process configs
-
-    # create dataset
-    dataset = create_dataset(configs, data)
+    import os 
+    import pickle
+    if os.path.exists(f"dataset/{configs['data_set']}.pkl"):
+        with open(f"dataset/{configs['data_set']}.pkl", 'rb') as f:
+            dataset = pickle.load(f) 
+        print("load dataset")
+    else:
+        # create dataset
+        dataset = create_dataset(configs, data)
     dataloader = DataLoader(
         dataset=dataset,
         batch_size=configs["batch_size"],

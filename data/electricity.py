@@ -86,8 +86,8 @@ class ElectricityFormatter(GenericDataFormatter):
     test = df.loc[index >= test_boundary - 7]
 
     self.set_scalers(train)
-    self.set_scalers(valid)
-    self.set_scalers(test)
+    # self.set_scalers(valid)
+    # self.set_scalers(test)
 
     return (self.transform_inputs(data) for data in [train, valid, test])
 
