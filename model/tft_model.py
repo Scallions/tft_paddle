@@ -387,8 +387,8 @@ class TFT(nn.Layer):
         ### static encrichemtn 
         self.static_enh_grn = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, True, add_ctx=self.static_variables*self.hidden_size)
         ### atten
-        self.attn_layer = InterpretableMultiHeadAttention(self.attn_heads, self.hidden_size, dropout_rate=self.dropout)
-        # self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
+        #self.attn_layer = InterpretableMultiHeadAttention(self.attn_heads, self.hidden_size, dropout_rate=self.dropout)
+        self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
         self.attn_glu = GLU(self.hidden_size, self.hidden_size)
         self.attn_add_norm = Add_Norm(self.hidden_size)
         ## position wise feed-forward
@@ -504,7 +504,7 @@ class TFT(nn.Layer):
         ### decoder self attention
         # mask = get_decoder_mask(enriched)
         mask = paddle.cumsum(paddle.eye(enriched.shape[1]), 1)
-        x, _ = self.attn_layer(enriched, enriched, enriched,
+        x = self.attn_layer(enriched, enriched, enriched,
                           attn_mask=mask)
         x = self.attn_glu(x)
         x = self.attn_add_norm(x, enriched)

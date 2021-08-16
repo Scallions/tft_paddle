@@ -83,7 +83,7 @@ def load_data(configs):
     # print(raw_data.head())
     dataformer = create_dataformer()
     train, valid, test = dataformer.split_data(raw_data)
-    return train, valid, test
+    return train, valid, test, dataformer
 
 def create_dataset(configs, data):
     # process configs

@@ -20,6 +20,7 @@ import os
 import pathlib
 import numpy as np
 import paddle
+import pandas as pd
 
 
 # TODO: impl opter
@@ -88,7 +89,7 @@ def numpy_normalised_quantile_loss(y, y_pred, quantile):
       + (1. - quantile) * np.maximum(-prediction_underflow, 0.)
 
   quantile_loss = weighted_errors.mean()
-  normaliser = y.abs().mean()
+  normaliser = np.abs(y).mean()
 
   return 2 * quantile_loss / normaliser
 
@@ -102,3 +103,16 @@ def create_folder_if_not_exist(directory):
   """
   # Also creates directories recursively
   pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
+
+def unnormalize_tensor(data_formatter, data, identifier):
+    data = pd.DataFrame(
+        data.detach().cpu().numpy(),
+        columns=[
+            't+{}'.format(i)
+            for i in range(data.shape[1])
+        ])
+
+    data['identifier'] = int(identifier.item())
+    data = data_formatter.format_predictions(data)
+
+    return data.drop(columns=['identifier']).values
