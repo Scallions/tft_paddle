@@ -29,7 +29,7 @@ tft_model = model.create_model(configs)
 optimizer = utils.utils.create_optimizer(configs, tft_model)
 
 clip = paddle.nn.ClipGradByNorm(clip_norm=0.01)
-# scheduler = paddle.optimizer.lr.StepDecay(learning_rate=0.001, step_size=2, gamma=0.1, verbose=False)
+# scheduler = paddle.optimizer.lr.StepDecay(learning_rate=0.001, step_size=2, gamma=0.5, verbose=False)
 optimizer = paddle.optimizer.Adam(
         learning_rate=0.001,
         # learning_rate = scheduler,
@@ -37,7 +37,7 @@ optimizer = paddle.optimizer.Adam(
         grad_clip = clip,
         )
 ### load dataloader
-train, val, test = data.load_data(configs)
+train, val, test, dataformer = data.load_data(configs)
 train_loader = data.create_dataloader(configs, train)
 val_loader = data.create_dataloader(val_configs, val)
 ### loss func
@@ -71,8 +71,10 @@ for epoch in range(configs["epochs"]):
                 for val_batch in val_loader:
                     # val_output, val_encoder_output, val_decoder_putput, val_attn, val_attn_weights, _, _ = tft_model(val_batch)
                     val_output = tft_model(val_batch)
-                    val_loss = q_90_loss_func(val_output[:,:,:].reshape((-1,3))[:,2:], val_batch['outputs'][:,:,0].flatten().astype('float32')) / batch['outputs'].abs().mean()
-                    val_losses.append(val_loss.item())
+                    target = utils.utils.unnormalize_tensor(dataformer, val_batch['outputs'].squeeze(), val_batch['identifier'][0][0])
+                    p90_forecast = utils.utils.unnormalize_tensor(dataformer, val_output[:,:,2], val_batch['identifier'][0][0])
+                    # val_loss = q_90_loss_func(val_output[:,:,:].reshape((-1,3))[:,2:], val_batch['outputs'][:,:,0].flatten().astype('float32')) / batch['outputs'].abs().mean()
+                    val_losses.append(utils.utils.numpy_normalised_quantile_loss(target, p90_forecast,0.9))
             v_loss = np.mean(val_losses)
             m_v_loss = min(v_loss, m_v_loss)
             # logger.info(msg)

@@ -213,8 +213,8 @@ class ElectricityFormatter(GenericDataFormatter):
     df_list = []
     for identifier, sliced in predictions.groupby('identifier'):
       sliced_copy = sliced.copy()
-      target_scaler = self._target_scaler[identifier]
-
+      # target_scaler = self._target_scaler[identifier]
+      target_scaler = self._target_scaler[self._cat_scalers['categorical_id'].inverse_transform([identifier]).item()]
       for col in column_names:
         if col not in {'forecast_time', 'identifier'}:
           sliced_copy[col] = target_scaler.inverse_transform(sliced_copy[col])
