@@ -44,7 +44,7 @@ class TimeDistributed(nn.Layer):
 class RealEmbedding(nn.Layer):
     def __init__(self, input_size, embedding_size):
         super().__init__()
-        self.layer = TimeDistributed(nn.Layer(input_size, embedding_size))
+        self.layer = TimeDistributed(nn.Linear(input_size, embedding_size))
 
     def forward(self, x):
         return self.layer(x)
@@ -74,12 +74,19 @@ class ScaledDotProductAttention(nn.Layer):
             Tuple of (layer outputs, attention weights)
         """
         attn = paddle.bmm(q,k.transpose([0,2,1])) # shape=(batch, q, k)
+        temper = k.shape[-1]**0.5
+        attn = attn / temper
         if mask is not None:
             # attn = attn.masked_fill(mask.bool(), -1e9)
-            fill = -1e9 * mask
-            fmask = -1 * (mask - 1)
-            attn = fmask * attn + fill
-            # attn = paddle.masked_selet(attn, mask.bool())
+            ## 1
+            # fill = -1e9 * mask
+            # fmask = -1 * (mask - 1)
+            # attn = fmask * attn + fill
+            ## attn = paddle.masked_selet(attn, mask.bool())
+            ## google
+            # REVIEW
+            mask = -1e9 * (1-mask)
+            attn = attn + mask
 
         attn = self.activation(attn)
         attn = self.dropout(attn)
@@ -119,17 +126,16 @@ class InterpretableMultiHeadAttention(nn.Layer):
         self.vs_layers = nn.LayerList()
 
         # Use same value layer to facilitate interp
-        vs_layer = nn.Linear(d_model, d_v)
-        qs_layer = nn.Linear(d_model, d_k)
-        ks_layer = nn.Linear(d_model, d_k)
+        vs_layer = nn.Linear(d_model, d_k, bias_attr=False)
+        # REVIEW
 
         for _ in range(n_head):
-            self.qs_layers.append(qs_layer)
-            self.ks_layers.append(ks_layer)
+            self.qs_layers.append(nn.Linear(d_model, d_v, bias_attr=False))
+            self.ks_layers.append(nn.Linear(d_model, d_v, bias_attr=False))
             self.vs_layers.append(vs_layer)  # use same vs_layer
 
         self.attention = ScaledDotProductAttention()
-        self.w_o = nn.Linear(self.d_k, d_model)
+        self.w_o = nn.Linear(self.d_k, d_model, bias_attr=False)
 
     def forward(self, q, k, v, attn_mask=None):
         """Applies interpretable multihead attention.
@@ -161,7 +167,8 @@ class InterpretableMultiHeadAttention(nn.Layer):
         outputs = self.w_o(outputs)
         outputs = self.dropout(outputs)  # output dropout
 
-        return outputs, attn
+        # return outputs, attn
+        return outputs
 
 class Linear(nn.Layer):
     def __init__(self, inp_size, out_size, use_td=False):
@@ -175,6 +182,7 @@ class Linear(nn.Layer):
 
 class GLU(nn.Layer):
     # Gated Linear Unit
+    ## REVIEW
     def __init__(self, inp_size, hidden_size, dropout=None, use_td=True):
         super().__init__()
         self.dropout = dropout
@@ -188,14 +196,13 @@ class GLU(nn.Layer):
     def forward(self, x):
         if self.dropout is not None:
             x = self.dropout_layer(x)
-        sig = self.sigmoid(self.fc1(x))
-        x = self.fc2(x)
-        return paddle.multiply(sig, x)
+        fc1 = self.fc1(x)
+        sig = self.sigmoid(self.fc2(x))
+        return paddle.multiply(sig, fc1)
 
 class Add_Norm(nn.Layer):
     def __init__(self, size):
         super().__init__()
-        # TODO: shape
         self.layer_norm = nn.LayerNorm(size)
 
     def forward(self, x, skip):
@@ -221,12 +228,12 @@ class GRN(nn.Layer):
         
         self.add_ctx = None
         if add_ctx is not None:
-            self.add_ctx = Linear(hidden_state_size, hidden_state_size, use_td)
+            # self.add_ctx = Linear(hidden_state_size, hidden_state_size, use_td)
+            self.add_ctx = Linear(add_ctx, hidden_state_size, use_td)
 
         self.elu = nn.ELU()
         self.hidden_layer2 = Linear(hidden_state_size, hidden_state_size, use_td)
         self.gating_layer = GLU(hidden_state_size, output_size, dropout, use_td)
-        # TODO: shape       
         self.add_norm = Add_Norm(self.output_size)
 
     def forward(self, x, ctx=None):
@@ -265,7 +272,7 @@ class StaticVariableSelectionNetwork(nn.Layer):
         self.softmax = nn.Softmax()
 
     def forward(self, embedding, context=None):
-        flatten = self.flatten(embedding)
+        flatten = self.flatten(embedding) # b 160
         if context is not None:
             mlp_outputs = self.flattened_grn(flatten, context)
         else:
@@ -274,8 +281,11 @@ class StaticVariableSelectionNetwork(nn.Layer):
 
         trans_emb_list = []
         for i in range(self.num_inputs):
+            # trans_emb_list.append(
+            #     self.single_variable_grns[i](embedding[:, :, (i * self.input_size): (i + 1) * self.input_size]))
+            ## REVIEW
             trans_emb_list.append(
-                self.single_variable_grns[i](embedding[:, :, (i * self.input_size): (i + 1) * self.input_size]))
+                self.single_variable_grns[i](embedding[:, i: i + 1, :]))
         transformed_embbeding = paddle.concat(trans_emb_list, axis=1)
         combined = paddle.multiply(sparse_weights, transformed_embbeding)
         static_vec = paddle.sum(combined, axis=1)
@@ -387,8 +397,8 @@ class TFT(nn.Layer):
         ### static encrichemtn 
         self.static_enh_grn = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, True, add_ctx=self.static_variables*self.hidden_size)
         ### atten
-        #self.attn_layer = InterpretableMultiHeadAttention(self.attn_heads, self.hidden_size, dropout_rate=self.dropout)
-        self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
+        self.attn_layer = InterpretableMultiHeadAttention(self.attn_heads, self.hidden_size, dropout_rate=self.dropout)
+        # self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
         self.attn_glu = GLU(self.hidden_size, self.hidden_size)
         self.attn_add_norm = Add_Norm(self.hidden_size)
         ## position wise feed-forward
@@ -399,7 +409,7 @@ class TFT(nn.Layer):
         self.out_layer = Linear(self.hidden_size, self.num_quantiles, use_td=True)
 
     def forward(self, x):
-        inputs = x['inputs'] # b t l
+        inputs = x['inputs'] # b t l b 192 5
         num_cat = len(self.cat_counts) # 类型变量数 1 
         num_reg = self.input_size - num_cat # 标量变量数 4
         num_sta = self.static_variables # 统计变量数 1
@@ -408,13 +418,14 @@ class TFT(nn.Layer):
         ## embedding inputs
         ### cat emb
         emb_cat_inps = [
-            self.cat_embeddings[i](cat_inps[:,:,i])
+            self.cat_embeddings[i](cat_inps[:,:,i]) # b 192 160   params_count 59040
             for i in range(num_cat)
         ]
         ### sta emb
         sta_inps = [ self.static_embedding_layers[i](x['identifier'][:, 0, i]) for i in range(num_reg) if i in self.static_loc] \
-             + [ emb_cat_inps[i][:,0,:] for i in range(num_cat) if i+num_reg in self.static_loc]
-        sta_inps = paddle.stack(sta_inps, axis=1) # b l d
+             + [ emb_cat_inps[i][:,0,:] for i in range(num_cat) if i+num_reg in self.static_loc] # b 160
+        sta_inps = paddle.stack(sta_inps, axis=1) # b l d  b 1 160
+        ### real emb
         obs_inps = [
             self.reg_embedding_layers[i](reg_inps[:,:,i:i+1])
             for i in self.input_obs_loc
@@ -503,7 +514,8 @@ class TFT(nn.Layer):
         ## temporal sefl-attention
         ### decoder self attention
         # mask = get_decoder_mask(enriched)
-        mask = paddle.cumsum(paddle.eye(enriched.shape[1]), 1)
+        mask = paddle.cumsum(paddle.ones((enriched.shape[0],1,1))*paddle.eye(enriched.shape[1]), 1)
+        # mask = paddle.cumsum(paddle.eye(enriched.shape[1]).reshape((1, enriched.shape[1], enriched.shape[1])).repeat(enriched.shape[0], 1, 1), 1)
         x = self.attn_layer(enriched, enriched, enriched,
                           attn_mask=mask)
         x = self.attn_glu(x)

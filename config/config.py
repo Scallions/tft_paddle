@@ -35,7 +35,7 @@ configs['static_cols'] = ['categorical_id']
 configs['static_variables'] = len(configs['static_cols'])
 configs['input_cols'] =['power_usage', 'hour', 'day_of_week', 'hours_from_start', 'categorical_id']
 configs['target_col'] = 'power_usage'
-configs['max_samples'] = 450000
+configs['max_samples'] = 4500
 configs['data_set'] = 'train'
 
 ## 输入输出设置和数据集对应
@@ -43,5 +43,5 @@ configs['input_size'] = 5
 configs['output_size'] = 1
 
 val_configs = configs.copy()
-val_configs['max_samples'] = 50000
+val_configs['max_samples'] = 500
 val_configs['data_set'] = 'val'
