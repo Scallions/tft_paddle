@@ -22,7 +22,7 @@ configs['num_quantiles'] = 3
 configs['vailid_quantiles'] = [0.1, 0.5, 0.9]
 ## 训练设置
 configs['device'] = 'gpu'
-configs['epochs'] = 100
+configs['epochs'] = 10
 configs['learning_rate'] = 0.001
 ## 数据集设置
 configs['data_csv_path'] = 'dataset/LD2011_2014.csv'
