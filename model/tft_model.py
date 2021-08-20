@@ -224,7 +224,7 @@ class GRN(nn.Layer):
         self.add_ctx = None
         if add_ctx is not None:
             # self.add_ctx = Linear(hidden_state_size, hidden_state_size, use_td)
-            self.add_ctx = Linear(add_ctx, hidden_state_size, use_td)
+            self.add_ctx = Linear(add_ctx, hidden_state_size, use_td, bias=False)
 
         self.elu = nn.ELU()
         self.hidden_layer2 = Linear(hidden_state_size, hidden_state_size, use_td)
@@ -272,7 +272,7 @@ class StaticVariableSelectionNetwork(nn.Layer):
             mlp_outputs = self.flattened_grn(flatten, context)
         else:
             mlp_outputs = self.flattened_grn(flatten)
-        sparse_weights = self.softmax(mlp_outputs).unsqueeze(2)
+        sparse_weights = self.softmax(mlp_outputs).unsqueeze(-1)
 
         trans_emb_list = []
         for i in range(self.num_inputs):
