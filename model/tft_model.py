@@ -1,6 +1,5 @@
 from model.model import Embedding
 import paddle
-from paddle.fluid.layers.nn import embedding
 import paddle.nn as nn
 
 
@@ -40,14 +39,6 @@ class TimeDistributed(nn.Layer):
         else:
             y = y.reshape((-1,x.shape[1],y.shape[-1]))
         return y
-
-class RealEmbedding(nn.Layer):
-    def __init__(self, input_size, embedding_size):
-        super().__init__()
-        self.layer = TimeDistributed(nn.Linear(input_size, embedding_size))
-
-    def forward(self, x):
-        return self.layer(x)
 
 
 class ScaledDotProductAttention(nn.Layer):
@@ -130,12 +121,12 @@ class InterpretableMultiHeadAttention(nn.Layer):
         # REVIEW
 
         for _ in range(n_head):
-            self.qs_layers.append(nn.Linear(d_model, d_v, bias_attr=False))
-            self.ks_layers.append(nn.Linear(d_model, d_v, bias_attr=False))
+            self.qs_layers.append(Linear(d_model, d_v, bias=False))
+            self.ks_layers.append(Linear(d_model, d_v, bias=False))
             self.vs_layers.append(vs_layer)  # use same vs_layer
 
         self.attention = ScaledDotProductAttention()
-        self.w_o = nn.Linear(self.d_k, d_model, bias_attr=False)
+        self.w_o = Linear(self.d_k, d_model, bias=False)
 
     def forward(self, q, k, v, attn_mask=None):
         """Applies interpretable multihead attention.
@@ -171,9 +162,12 @@ class InterpretableMultiHeadAttention(nn.Layer):
         return outputs
 
 class Linear(nn.Layer):
-    def __init__(self, inp_size, out_size, use_td=False):
+    def __init__(self, inp_size, out_size, use_td=False, bias=True):
         super().__init__()
-        self.linear = nn.Linear(inp_size, out_size)
+        if not bias:
+            self.linear = nn.Linear(inp_size, out_size, bias_attr=False)
+        else:
+            self.linear = nn.Linear(inp_size, out_size)
         if use_td:
             self.linear = TimeDistributed(self.linear)
 
@@ -221,7 +215,7 @@ class GRN(nn.Layer):
 
         ## skip connection
         if self.input_size != self.output_size:
-            self.skip_layer = TimeDistributed(nn.Linear(self.input_size, self.output_size))
+            self.skip_layer = Linear(self.input_size, self.output_size, use_td)
         
         ## feedforward network
         self.hidden_layer = Linear(self.input_size, self.hidden_state_size, use_td)
@@ -367,6 +361,7 @@ class TFT(nn.Layer):
         self.cat_embeddings = nn.LayerList()
         for i in range(len(self.cat_counts)):
             emb = Embedding(self.cat_counts[i], self.hidden_size)
+            # emb = nn.Embedding(self.cat_counts[i], self.hidden_size)
             self.cat_embeddings.append(emb)
         ### sta emb
         self.static_embedding_layers = nn.LayerList()
