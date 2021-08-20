@@ -165,7 +165,11 @@ class StaticCombineAndMask(nn.Layer):
         for i in range(self.num_static):
             self.single_variable_grns.append(GatedResidualNetwork(self.hidden_layer_size, self.hidden_layer_size, None, self.dropout_rate, use_time_distributed=False, return_gate=False, batch_first=batch_first))
 
+<<<<<<< HEAD
         self.softmax = nn.Softmax()
+=======
+        self.softmax = nn.Softmax(axis=1)
+>>>>>>> develop
 
     def forward(self, embedding, additional_context=None):
         # Add temporal features
@@ -209,7 +213,11 @@ class LSTMCombineAndMask(nn.Layer):
             self.single_variable_grns.append(GatedResidualNetwork(self.hidden_layer_size, self.hidden_layer_size, None, self.dropout_rate, use_time_distributed=use_time_distributed, return_gate=False, batch_first=batch_first))
 
         # TODO: change dim
+<<<<<<< HEAD
         self.softmax = nn.Softmax()
+=======
+        self.softmax = nn.Softmax(axis=2)
+>>>>>>> develop
 
     def forward(self, embedding, additional_context=None):
         # Add temporal features
@@ -255,7 +263,11 @@ class ScaledDotProductAttention(nn.Layer):
         super(ScaledDotProductAttention, self).__init__()
 
         self.dropout = nn.Dropout(attn_dropout)
+<<<<<<< HEAD
         self.activation = nn.Softmax()
+=======
+        self.activation = nn.Softmax(axis=-1)
+>>>>>>> develop
         # self.device = paddle.device('cuda' if paddle.cuda.is_available() else 'cpu')
 
     def forward(self, q, k, v, mask):

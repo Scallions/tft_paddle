@@ -79,7 +79,7 @@ class TSDataset(Dataset):
 def load_data(configs):
     data_csv_path = configs['data_csv_path']
 
-    raw_data = pd.read_csv(data_csv_path, index_col=0)
+    raw_data = pd.read_csv(data_csv_path, index_col=0, na_filter=False)
     # print(raw_data.head())
     dataformer = create_dataformer()
     train, valid, test = dataformer.split_data(raw_data)

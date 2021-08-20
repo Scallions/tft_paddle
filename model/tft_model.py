@@ -1,6 +1,5 @@
 from model.model import Embedding
 import paddle
-from paddle.fluid.layers.nn import embedding
 import paddle.nn as nn
 
 
@@ -40,14 +39,6 @@ class TimeDistributed(nn.Layer):
         else:
             y = y.reshape((-1,x.shape[1],y.shape[-1]))
         return y
-
-class RealEmbedding(nn.Layer):
-    def __init__(self, input_size, embedding_size):
-        super().__init__()
-        self.layer = TimeDistributed(nn.Linear(input_size, embedding_size))
-
-    def forward(self, x):
-        return self.layer(x)
 
 
 class ScaledDotProductAttention(nn.Layer):
@@ -130,12 +121,12 @@ class InterpretableMultiHeadAttention(nn.Layer):
         # REVIEW
 
         for _ in range(n_head):
-            self.qs_layers.append(nn.Linear(d_model, d_v, bias_attr=False))
-            self.ks_layers.append(nn.Linear(d_model, d_v, bias_attr=False))
+            self.qs_layers.append(Linear(d_model, d_v, bias=False))
+            self.ks_layers.append(Linear(d_model, d_v, bias=False))
             self.vs_layers.append(vs_layer)  # use same vs_layer
 
         self.attention = ScaledDotProductAttention()
-        self.w_o = nn.Linear(self.d_k, d_model, bias_attr=False)
+        self.w_o = Linear(self.d_k, d_model, bias=False)
 
     def forward(self, q, k, v, attn_mask=None):
         """Applies interpretable multihead attention.
@@ -171,9 +162,12 @@ class InterpretableMultiHeadAttention(nn.Layer):
         return outputs
 
 class Linear(nn.Layer):
-    def __init__(self, inp_size, out_size, use_td=False):
+    def __init__(self, inp_size, out_size, use_td=False, bias=True):
         super().__init__()
-        self.linear = nn.Linear(inp_size, out_size)
+        if not bias:
+            self.linear = nn.Linear(inp_size, out_size, bias_attr=False)
+        else:
+            self.linear = nn.Linear(inp_size, out_size)
         if use_td:
             self.linear = TimeDistributed(self.linear)
 
@@ -221,7 +215,7 @@ class GRN(nn.Layer):
 
         ## skip connection
         if self.input_size != self.output_size:
-            self.skip_layer = TimeDistributed(nn.Linear(self.input_size, self.output_size))
+            self.skip_layer = Linear(self.input_size, self.output_size, use_td)
         
         ## feedforward network
         self.hidden_layer = Linear(self.input_size, self.hidden_state_size, use_td)
@@ -367,6 +361,7 @@ class TFT(nn.Layer):
         self.cat_embeddings = nn.LayerList()
         for i in range(len(self.cat_counts)):
             emb = Embedding(self.cat_counts[i], self.hidden_size)
+            # emb = nn.Embedding(self.cat_counts[i], self.hidden_size)
             self.cat_embeddings.append(emb)
         ### sta emb
         self.static_embedding_layers = nn.LayerList()
@@ -376,7 +371,8 @@ class TFT(nn.Layer):
         ### real emb
         self.reg_embedding_layers = nn.LayerList()
         for i in range(self.input_size - len(self.cat_counts)):
-            emb = TimeDistributed(nn.Linear(1, self.hidden_size))
+            # emb = TimeDistributed(nn.Linear(1, self.hidden_size))
+            emb = Linear(1, self.hidden_size, use_td=True)
             self.reg_embedding_layers.append(emb)
         ### TODO: cal inps size
         ### static variable select
@@ -386,11 +382,20 @@ class TFT(nn.Layer):
         self.static_grn3 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         self.static_grn4 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         ### hisotry and feature select
-        self.hsitory_select = TimeVariableSelectionNetwork(self.encode_length, self.hidden_size, 4, self.hidden_size, self.dropout, self.static_variables*self.hidden_size)
-        self.feature_sleect = TimeVariableSelectionNetwork(self.seq_length-self.encode_length, self.hidden_size, 3, self.hidden_size, self.dropout,self.static_variables*self.hidden_size)
-        ### hsitory and feature lstm
-        self.hsitory_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False)
-        self.feature_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False)
+        self.history_select = TimeVariableSelectionNetwork(self.encode_length, self.hidden_size, 4, self.hidden_size, self.dropout, self.static_variables*self.hidden_size)
+        self.future_select = TimeVariableSelectionNetwork(self.seq_length-self.encode_length, self.hidden_size, 3, self.hidden_size, self.dropout,self.static_variables*self.hidden_size)
+        ### history and feature lstm
+        from scipy.stats import ortho_group
+        his_whh = ortho_group.rvs(size=2, dim=640)[0][:,:160]
+        fut_whh = ortho_group.rvs(size=2, dim=640)[0][:,:160]
+        self.history_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False,
+            weight_ih_attr = paddle.framework.ParamAttr(name="history_weight_ih",initializer=paddle.nn.initializer.XavierUniform()),
+            weight_hh_attr = paddle.framework.ParamAttr(name="history_weight_hh",initializer=paddle.nn.initializer.Assign(his_whh)),
+            )
+        self.future_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False,
+            weight_ih_attr = paddle.framework.ParamAttr(name="future_weight_ih",initializer=paddle.nn.initializer.XavierUniform()),
+            weight_hh_attr = paddle.framework.ParamAttr(name="future_weight_hh",initializer=paddle.nn.initializer.Assign(fut_whh)),
+            )
         ### lstm glu add_and_norm
         self.lstm_glu = GLU(self.hidden_size, self.hidden_size, self.dropout)
         self.lstm_add_norm = Add_Norm(self.hidden_size)
@@ -488,18 +493,18 @@ class TFT(nn.Layer):
         static_context_state_c = self.static_grn4(static_encoder)
 
         ## variable selection
-        historical_features, historical_flags = self.hsitory_select(
+        historical_features, historical_flags = self.history_select(
         history_inps, static_context_variable_selection) # B T Hide
-        future_features, future_flags = self.feature_sleect(future_inps, static_context_variable_selection) # B T Hide
+        future_features, future_flags = self.future_select(future_inps, static_context_variable_selection) # B T Hide
 
         # LSTM layer
         ## lstm encoder
         history_lstm, (state_h, state_c) \
-        = self.hsitory_lstm(historical_features,
+        = self.history_lstm(historical_features,
                                       initial_states=[static_context_state_h.unsqueeze(0),
                                                      static_context_state_c.unsqueeze(0)])
         ## lstm decoder
-        future_lstm, _ = self.feature_lstm(
+        future_lstm, _ = self.future_lstm(
         future_features, initial_states=[state_h, state_c])
         ## apply gated skip connection
         lstm_layer = paddle.concat([history_lstm, future_lstm], axis=1) # B T H
