@@ -22,7 +22,7 @@ configs = config.configs
 val_configs = config.val_configs
 
 ### load dataloader
-train, val, test = data.load_data(configs)
+train, val, test,_ = data.load_data(configs)
 
 train = data.create_dataset(configs, train)
 val = data.create_dataset(val_configs, val)
