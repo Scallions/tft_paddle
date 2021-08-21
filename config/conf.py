@@ -37,7 +37,7 @@ def set_seed(seed=None):
 
 class Conf(object):
     HOSTNAME = socket.gethostname()
-    LOG_PATH = Path('./logs/')
+    LOG_PATH = Path('./log/')
 
     def __init__(self, conf_file_path=None, seed=None, exp_name=None, log=True):
         # type: (str, int, str, bool) -> None

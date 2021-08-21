@@ -9,9 +9,9 @@ log_step: 200
 
 # Dataset
 ds_name: electricity
-train_samples: 450000
-test_samples: 50000
-val_samples: 50000
+train_samples: 450
+test_samples: 500
+val_samples: 500
 input_size: 5
 output_size: 1
 total_time_steps: 192

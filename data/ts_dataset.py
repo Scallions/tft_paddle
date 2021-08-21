@@ -14,8 +14,8 @@ class TSDataset(Dataset):
         self.params = cnf.all_params
 
         #self.csv = utils.data_csv_path(cnf.ds_name)
-        self.csv = 'C:\\Users\\Administrator\Desktop\\tft_from_torch\data\\'
-        self.data = pd.read_csv(r'C:\Users\Administrator\Desktop\tft_from_torch\data\hourly_electricity.csv', index_col=0, na_filter=False)
+        self.csv = 'dataset/'
+        self.data = pd.read_csv('dataset/electricity.csv', index_col=0, na_filter=False)
 
         self.train_set, self.valid_set, self.test_set = data_formatter.split_data(self.data)
         self.params['column_definition'] = data_formatter.get_column_definition()
@@ -144,10 +144,10 @@ class TSDataset(Dataset):
 
 
 @click.command()
-@click.option('--conf_file_path', type=str, default=r"C:\Users\Administrator\Desktop\tft_from_torch\conf\electricity.yaml")
+@click.option('--conf_file_path', type=str, default="config/electricity.yaml")
 def main(conf_file_path):
-    import data_formatters.utils as utils
-    from conf import Conf
+    import data.utils as utils
+    from config import Conf
 
     cnf = Conf(conf_file_path=conf_file_path, seed=15, exp_name="test", log=False)
     data_formatter = utils.make_data_formatter(cnf.ds_name)

@@ -6,13 +6,13 @@ import numpy as np
 import paddle
 from paddle import optimizer
 from paddle.io import DataLoader
-from tft_model import TFT
-from conf import Conf
-from dataset.ts_dataset import TSDataset
-from progress_bar import ProgressBar
-from utils import QuantileLoss, symmetric_mean_absolute_percentage_error, unnormalize_tensor, plot_temporal_serie
-from data_formatters.utils import logger_config
-import data_formatters.utils as utils
+from model.tft_model import TFT
+from config import Conf
+from data.ts_dataset import TSDataset
+from utils.progress_bar import ProgressBar
+from utils.utils import QuantileLoss, symmetric_mean_absolute_percentage_error, unnormalize_tensor, plot_temporal_serie
+from data.utils import logger_config
+import data.utils as utils
 
 
 logger = logger_config(log_path='experiment/TFTransformer_log.txt', logging_name='TFTransformer')

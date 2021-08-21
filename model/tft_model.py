@@ -1,7 +1,7 @@
 # from model.model import Embedding
 import paddle
 import paddle.nn as nn
-
+import json
 
 ## quantileloss
 class QuantileLoss(nn.Layer):
@@ -335,28 +335,33 @@ class TimeVariableSelectionNetwork(nn.Layer):
         return static_vec, sparse_weights
 
 class TFT(nn.Layer):
-    def __init__(self, config):
+    def __init__(self, raw_params):
         super().__init__()
+        params = dict(raw_params)  # copy locally
+        print(params)
+
         ## data params
-        self.input_size = 5
-        self.output_size = 1
-        self.static_variables = 1
-        self.input_obs_loc = [0]
-        self.static_loc = [4]
-        self.cat_counts = [369]
-        self.know_reg = [1,2,3]
-        self.know_cat = [0]
+        self.input_size = int(params['input_size'])
+        self.output_size = int(params['output_size'])
+        self.input_obs_loc = json.loads(str(params['input_obs_loc']))
+        self.static_loc = json.loads(str(params['static_input_loc']))
+        self.static_variables = len(self.static_loc)
+        self.cat_counts = json.loads(str(params['category_counts']))
+        self.know_reg = json.loads(
+            str(params['known_regular_inputs']))
+        self.know_cat = json.loads(
+            str(params['known_categorical_inputs']))
 
         # network params
-        self.batch_size = 64
-        self.hidden_size = 160
-        self.dropout = 0.1
-        self.attn_heads = 4
-        self.num_quantiles = 3
+        self.batch_size = int(params['batch_size'])
+        self.hidden_size = int(params['hidden_layer_size'])
+        self.dropout = float(params['dropout_rate'])
+        self.attn_heads = int(params['num_heads'])
+        self.num_quantiles = len(list(params['quantiles']))
 
 
-        self.encode_length = 168
-        self.seq_length = 192
+        self.encode_length = int(params['num_encoder_steps'])
+        self.seq_length = int(params['total_time_steps'])
         ## init embddings
         ### cat emb
         self.cat_embeddings = nn.LayerList()
@@ -375,7 +380,6 @@ class TFT(nn.Layer):
             # emb = TimeDistributed(nn.Linear(1, self.hidden_size))
             emb = Linear(1, self.hidden_size, use_td=True)
             self.reg_embedding_layers.append(emb)
-        ### TODO: cal inps size
         ### static variable select
         self.static_select = StaticVariableSelectionNetwork(self.hidden_size, self.static_variables, self.hidden_size, self.dropout)
         self.static_grn1 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)

@@ -14,12 +14,10 @@ class ProgressBar(object):
 
     @property
     def progress(self):
-        # type: () -> float
         return (self.step + 1) / self.max_step
 
 
     def __init__(self, max_step, max_epoch, current_epoch=0):
-        # type: (int, int, int) -> None
         self.max_step = max_step
         self.max_epoch = max_epoch
         self.current_epoch = current_epoch
@@ -27,7 +25,6 @@ class ProgressBar(object):
 
 
     def inc(self):
-        # type: () -> ()
         """
         Increase the progress bar value by one unit
         """
@@ -38,7 +35,6 @@ class ProgressBar(object):
 
 
     def __str__(self):
-        # type: () -> str
         value = int(round(self.progress * 50))
         date = datetime.now().strftime("%b-%d@%H:%M").lower()
         progress_bar = ('█' * value + ('┈' * (50 - value)))

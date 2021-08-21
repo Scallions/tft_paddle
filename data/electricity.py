@@ -20,14 +20,14 @@ Defines dataset specific column definitions and data transformations. Uses
 entity specific z-score normalization.
 """
 
-import data_formatters.base
-import data_formatters.utils as utils
+import data.base
+import data.utils as utils
 import pandas as pd
 import sklearn.preprocessing
 
-GenericDataFormatter = data_formatters.base.GenericDataFormatter
-DataTypes = data_formatters.base.DataTypes
-InputTypes = data_formatters.base.InputTypes
+GenericDataFormatter = data.base.GenericDataFormatter
+DataTypes = data.base.DataTypes
+InputTypes = data.base.InputTypes
 
 
 class ElectricityFormatter(GenericDataFormatter):

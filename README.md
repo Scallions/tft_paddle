@@ -32,4 +32,9 @@
   python main.py --exp_name electricity --conf_file_path your_file_path --inference True
   ```
 
-  
+## 实验结果
+![](images/Figure_1.png)
+
+## 参考资料
+- [google-research/tft](https://github.com/google-research/google-research/tree/master/tft)
+- [stevinc/Transformer_Timeseries](https://github.com/stevinc/Transformer_Timeseries)

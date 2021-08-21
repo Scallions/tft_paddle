@@ -20,7 +20,7 @@ import os
 import pathlib
 import paddle
 import numpy as np
-import data_formatters
+import data
 import logging
 
 
@@ -133,10 +133,7 @@ def make_data_formatter(exp_name):
     """
 
     data_formatter_class = {
-        'volatility': data_formatters.volatility.VolatilityFormatter,
-        'electricity': data_formatters.electricity.ElectricityFormatter,
-        'traffic': data_formatters.traffic.TrafficFormatter,
-        'favorita': data_formatters.favorita.FavoritaFormatter,
+        'electricity': data.electricity.ElectricityFormatter,
     }
 
     return data_formatter_class[exp_name]()
@@ -148,10 +145,7 @@ def csv_path_to_folder(path: str):
 
 def data_csv_path(exp_name):
     csv_map = {
-        'volatility': './data/volatility/formatted_omi_vol.csv',
-        'electricity': r'C:\Users\Administrator\Desktop\tft_from_torch\data\hourly_electricity.csv',
-        'traffic': 'data/hourly_electricity.csv',
-        'favorita': './data/favorita/favorita_consolidated.csv',
+        'electricity': 'dataset/electricity.csv',
     }
 
     return csv_map[exp_name]
@@ -188,4 +182,4 @@ def logger_config(log_path, logging_name):
 
 
 if __name__ == '__main__':
-    print(csv_path_to_folder('./data/hourly_electricity.csv'))
+    print(csv_path_to_folder('./data/electricity.csv'))
