@@ -31,5 +31,5 @@
   ```python
   python main.py --exp_name electricity --conf_file_path your_file_path --inference True
   ```
-
+![image](https://github.com/Scallions/tft_paddle/blob/develop/Figure_1.png)
   
