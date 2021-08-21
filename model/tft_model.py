@@ -1,4 +1,4 @@
-from model.model import Embedding
+# from model.model import Embedding
 import paddle
 import paddle.nn as nn
 
@@ -20,6 +20,14 @@ class QuantileLoss(nn.Layer):
             losses.append((left + right).unsqueeze(1))
         loss = paddle.mean(paddle.sum(paddle.concat(losses,axis=1),axis=1))
         return loss
+
+class Embedding(nn.Layer):
+    def __init__(self, num_embeddings, embedding_dim, padding_idx=None, sparse=False, weight_attr=None, name=None):
+        super().__init__()
+        self.emb = nn.Embedding(num_embeddings, embedding_dim, padding_idx, sparse, weight_attr, name)
+    
+    def forward(self, x):
+        return self.emb(x.astype('int64'))
 
 class TimeDistributed(nn.Layer):
     def __init__(self, module, batch_first=True):
@@ -117,7 +125,7 @@ class InterpretableMultiHeadAttention(nn.Layer):
         self.vs_layers = nn.LayerList()
 
         # Use same value layer to facilitate interp
-        vs_layer = Linear(d_model, d_k, bias=False)
+        vs_layer = nn.Linear(d_model, d_k, bias_attr=False)
         # REVIEW
 
         for _ in range(n_head):
@@ -164,11 +172,10 @@ class InterpretableMultiHeadAttention(nn.Layer):
 class Linear(nn.Layer):
     def __init__(self, inp_size, out_size, use_td=False, bias=True):
         super().__init__()
-        weight_attr = paddle.framework.ParamAttr(initializer=paddle.nn.initializer.XavierUniform())
         if not bias:
-            self.linear = nn.Linear(inp_size, out_size, bias_attr=False, weight_attr=weight_attr)
+            self.linear = nn.Linear(inp_size, out_size, bias_attr=False)
         else:
-            self.linear = nn.Linear(inp_size, out_size, weight_attr=weight_attr)
+            self.linear = nn.Linear(inp_size, out_size)
         if use_td:
             self.linear = TimeDistributed(self.linear)
 
@@ -224,7 +231,7 @@ class GRN(nn.Layer):
         self.add_ctx = None
         if add_ctx is not None:
             # self.add_ctx = Linear(hidden_state_size, hidden_state_size, use_td)
-            self.add_ctx = Linear(add_ctx, hidden_state_size, use_td, bias=False)
+            self.add_ctx = Linear(add_ctx, hidden_state_size, use_td)
 
         self.elu = nn.ELU()
         self.hidden_layer2 = Linear(hidden_state_size, hidden_state_size, use_td)
@@ -272,7 +279,7 @@ class StaticVariableSelectionNetwork(nn.Layer):
             mlp_outputs = self.flattened_grn(flatten, context)
         else:
             mlp_outputs = self.flattened_grn(flatten)
-        sparse_weights = self.softmax(mlp_outputs).unsqueeze(-1)
+        sparse_weights = self.softmax(mlp_outputs).unsqueeze(2)
 
         trans_emb_list = []
         for i in range(self.num_inputs):
@@ -333,10 +340,7 @@ class TFT(nn.Layer):
         ## data params
         self.input_size = 5
         self.output_size = 1
-        self.time_varying_categoical_variables = config['time_varying_categoical_variables']
-        self.time_varying_real_variables_encoder = config['time_varying_real_variables_encoder']
-        self.time_varying_real_variables_decoder = config['time_varying_real_variables_decoder']
-        self.static_variables = config['static_variables']
+        self.static_variables = 1
         self.input_obs_loc = [0]
         self.static_loc = [4]
         self.cat_counts = [369]
@@ -344,19 +348,15 @@ class TFT(nn.Layer):
         self.know_cat = [0]
 
         # network params
-        self.batch_size = config['batch_size']
-        self.valid_quantiles = config['vailid_quantiles']
-        self.hidden_size = config['lstm_hidden_dimension']
-        self.lstm_layers = config['lstm_layers']
-        self.embedding_dim = config['embedding_dim']
-        self.dropout = config['dropout']
-        self.attn_heads = config['attn_heads']
-        self.num_quantiles = config['num_quantiles']
+        self.batch_size = 64
+        self.hidden_size = 160
+        self.dropout = 0.1
+        self.attn_heads = 4
+        self.num_quantiles = 3
 
 
-        self.encode_length = config['encode_length']
-        self.num_input_series_to_mask = config['num_masked_series']
-        self.seq_length = config['seq_length']
+        self.encode_length = 168
+        self.seq_length = 192
         ## init embddings
         ### cat emb
         self.cat_embeddings = nn.LayerList()
@@ -415,7 +415,8 @@ class TFT(nn.Layer):
         self.out_layer = Linear(self.hidden_size, self.num_quantiles, use_td=True)
 
     def forward(self, x):
-        inputs = x['inputs'] # b t l b 192 5
+        # inputs = x['inputs'] # b t l b 192 5
+        inputs = x
         num_cat = len(self.cat_counts) # 类型变量数 1 
         num_reg = self.input_size - num_cat # 标量变量数 4
         num_sta = self.static_variables # 统计变量数 1

@@ -233,3 +233,4 @@ class GenericDataFormatter(abc.ABC):
     fixed_params.update(self._get_tft_input_indices())
 
     return fixed_params
+
