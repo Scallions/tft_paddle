@@ -224,6 +224,7 @@ class Trainer(object):
         if self.best_test_loss is None or mean_test_loss < self.best_test_loss:
             self.best_test_loss = mean_test_loss
             paddle.save(self.model.state_dict(), self.log_path / self.cnf.exp_name + '_best.pdparams')
+            paddle.save(self.optimizer.state_dict(), self.log_path / self.cnf.exp_name + '_best.pdopt')
 
     def run(self):
         """
