@@ -111,10 +111,6 @@ class Trainer(object):
                 opti_state_dict = paddle.load(ckpt_path)
                 model.set_state_dict(para_state_dict)
                 optimizer.set_state_dict(opti_state_dict)
-
-                iter = resume_model.split('_')[-1]
-                iter = int(iter)
-                return iter
             else:
                 raise ValueError(
                     'Directory of the model needed to resume is not Found: {}'.
@@ -144,13 +140,6 @@ class Trainer(object):
 
             if step % self.cnf.all_params['log_step'] == 0:
                 logger.info('[TRAIN] Epoch {} \t Iter {} \t Loss {:.6f}'.format(self.epoch, step+1, loss.item()))
-            # print an incredible progress bar
-            # times.append(time() - t)
-            # if self.cnf.log_each_step or (not self.cnf.log_each_step and self.progress_bar.progress == 1):
-            #     print(f'\r{self.progress_bar} '
-            #           f'│ Loss: {np.mean(self.train_losses):.6f} '
-            #           f'│ ↯: {1 / np.mean(times):5.2f} step/s', end='')
-            # self.progress_bar.inc()
 
         # log average loss of this epoch
         mean_epoch_loss = np.mean(self.train_losses)
