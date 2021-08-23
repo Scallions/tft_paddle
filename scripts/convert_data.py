@@ -53,5 +53,5 @@ output['categorical_hour'] = output['hour'].copy()
 output = output[(output['days_from_start'] >= 1096)
                 & (output['days_from_start'] < 1346)].copy()
 
-output.to_csv("dataset/LD2011_2014.csv")
+output.to_csv("dataset/electricity.csv")
 logger.info('Done.')

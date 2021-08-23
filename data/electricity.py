@@ -21,7 +21,7 @@ entity specific z-score normalization.
 """
 
 import data.base
-import utils.utils as utils
+import data.utils as utils
 import pandas as pd
 import sklearn.preprocessing
 
@@ -77,17 +77,13 @@ class ElectricityFormatter(GenericDataFormatter):
     """
 
     print('Formatting train-valid-test splits.')
+
     index = df['days_from_start']
-    # if valid_boundary is None:
-    #   valid_boundary = index.quantile(0.7)
-    #   test_boundary = index.quantile(0.9)
     train = df.loc[index < valid_boundary]
     valid = df.loc[(index >= valid_boundary - 7) & (index < test_boundary)]
     test = df.loc[index >= test_boundary - 7]
 
     self.set_scalers(train)
-    # self.set_scalers(valid)
-    # self.set_scalers(test)
 
     return (self.transform_inputs(data) for data in [train, valid, test])
 
@@ -213,8 +209,8 @@ class ElectricityFormatter(GenericDataFormatter):
     df_list = []
     for identifier, sliced in predictions.groupby('identifier'):
       sliced_copy = sliced.copy()
-      # target_scaler = self._target_scaler[identifier]
-      target_scaler = self._target_scaler[self._cat_scalers['categorical_id'].inverse_transform([identifier]).item()]
+      target_scaler = self._target_scaler[identifier]
+
       for col in column_names:
         if col not in {'forecast_time', 'identifier'}:
           sliced_copy[col] = target_scaler.inverse_transform(sliced_copy[col])
@@ -250,7 +246,6 @@ class ElectricityFormatter(GenericDataFormatter):
         'num_heads': 4,
         'stack_size': 1
     }
-
     return model_params
 
   def get_num_samples_for_calibration(self):
@@ -263,6 +258,3 @@ class ElectricityFormatter(GenericDataFormatter):
       Tuple of (training samples, validation samples)
     """
     return 450000, 50000
-
-def create_dataformer():
-  return ElectricityFormatter()

@@ -1,7 +1,7 @@
-from model.model import Embedding
+# from model.model import Embedding
 import paddle
 import paddle.nn as nn
-
+import json
 
 ## quantileloss
 class QuantileLoss(nn.Layer):
@@ -20,6 +20,14 @@ class QuantileLoss(nn.Layer):
             losses.append((left + right).unsqueeze(1))
         loss = paddle.mean(paddle.sum(paddle.concat(losses,axis=1),axis=1))
         return loss
+
+class Embedding(nn.Layer):
+    def __init__(self, num_embeddings, embedding_dim, padding_idx=None, sparse=False, weight_attr=None, name=None):
+        super().__init__()
+        self.emb = nn.Embedding(num_embeddings, embedding_dim, padding_idx, sparse, weight_attr, name)
+    
+    def forward(self, x):
+        return self.emb(x.astype('int64'))
 
 class TimeDistributed(nn.Layer):
     def __init__(self, module, batch_first=True):
@@ -327,35 +335,33 @@ class TimeVariableSelectionNetwork(nn.Layer):
         return static_vec, sparse_weights
 
 class TFT(nn.Layer):
-    def __init__(self, config):
+    def __init__(self, raw_params):
         super().__init__()
+        params = dict(raw_params)  # copy locally
+        print(params)
+
         ## data params
-        self.input_size = 5
-        self.output_size = 1
-        self.time_varying_categoical_variables = config['time_varying_categoical_variables']
-        self.time_varying_real_variables_encoder = config['time_varying_real_variables_encoder']
-        self.time_varying_real_variables_decoder = config['time_varying_real_variables_decoder']
-        self.static_variables = config['static_variables']
-        self.input_obs_loc = [0]
-        self.static_loc = [4]
-        self.cat_counts = [369]
-        self.know_reg = [1,2,3]
-        self.know_cat = [0]
+        self.input_size = int(params['input_size'])
+        self.output_size = int(params['output_size'])
+        self.input_obs_loc = json.loads(str(params['input_obs_loc']))
+        self.static_loc = json.loads(str(params['static_input_loc']))
+        self.static_variables = len(self.static_loc)
+        self.cat_counts = json.loads(str(params['category_counts']))
+        self.know_reg = json.loads(
+            str(params['known_regular_inputs']))
+        self.know_cat = json.loads(
+            str(params['known_categorical_inputs']))
 
         # network params
-        self.batch_size = config['batch_size']
-        self.valid_quantiles = config['vailid_quantiles']
-        self.hidden_size = config['lstm_hidden_dimension']
-        self.lstm_layers = config['lstm_layers']
-        self.embedding_dim = config['embedding_dim']
-        self.dropout = config['dropout']
-        self.attn_heads = config['attn_heads']
-        self.num_quantiles = config['num_quantiles']
+        self.batch_size = int(params['batch_size'])
+        self.hidden_size = int(params['hidden_layer_size'])
+        self.dropout = float(params['dropout_rate'])
+        self.attn_heads = int(params['num_heads'])
+        self.num_quantiles = len(list(params['quantiles']))
 
 
-        self.encode_length = config['encode_length']
-        self.num_input_series_to_mask = config['num_masked_series']
-        self.seq_length = config['seq_length']
+        self.encode_length = int(params['num_encoder_steps'])
+        self.seq_length = int(params['total_time_steps'])
         ## init embddings
         ### cat emb
         self.cat_embeddings = nn.LayerList()
@@ -374,7 +380,6 @@ class TFT(nn.Layer):
             # emb = TimeDistributed(nn.Linear(1, self.hidden_size))
             emb = Linear(1, self.hidden_size, use_td=True)
             self.reg_embedding_layers.append(emb)
-        ### TODO: cal inps size
         ### static variable select
         self.static_select = StaticVariableSelectionNetwork(self.hidden_size, self.static_variables, self.hidden_size, self.dropout)
         self.static_grn1 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
@@ -414,7 +419,8 @@ class TFT(nn.Layer):
         self.out_layer = Linear(self.hidden_size, self.num_quantiles, use_td=True)
 
     def forward(self, x):
-        inputs = x['inputs'] # b t l b 192 5
+        # inputs = x['inputs'] # b t l b 192 5
+        inputs = x
         num_cat = len(self.cat_counts) # 类型变量数 1 
         num_reg = self.input_size - num_cat # 标量变量数 4
         num_sta = self.static_variables # 统计变量数 1

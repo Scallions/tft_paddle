@@ -1,118 +1,162 @@
-# coding=utf-8
-# Copyright 2019 The Google Research Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# -*- coding: utf-8 -*-
+# ---------------------
 
-# Lint as: python3
-"""Generic helper functions used across codebase."""
-
+import json
 import os
-import pathlib
+from datetime import datetime
+from enum import Enum
+
+import PIL
+import matplotlib.pyplot as plt
 import numpy as np
-import paddle
 import pandas as pd
-
-
-# TODO: impl opter
-def create_optimizer(configs, model):
-  clip = paddle.nn.ClipGradByGlobalNorm(clip_norm=0.001)
-  return paddle.optimizer.Adam(learning_rate=configs['learning_rate'],
-        parameters=model.parameters(),
-        # weight_decay = 0.01,
-        grad_clip=clip
-        )
-
-
-# Generic.
-def get_single_col_by_input_type(input_type, column_definition):
-  """Returns name of single column.
-
-  Args:
-    input_type: Input type of column to extract
-    column_definition: Column definition list for experiment
-  """
-
-  l = [tup[0] for tup in column_definition if tup[2] == input_type]
-
-  if len(l) != 1:
-    raise ValueError('Invalid number of columns for {}'.format(input_type))
-
-  return l[0]
-
-
-def extract_cols_from_data_type(data_type, column_definition,
-                                excluded_input_types):
-  """Extracts the names of columns that correspond to a define data_type.
-
-  Args:
-    data_type: DataType of columns to extract.
-    column_definition: Column definition to use.
-    excluded_input_types: Set of input types to exclude
-
-  Returns:
-    List of names for columns with data type specified.
-  """
-  return [
-      tup[0]
-      for tup in column_definition
-      if tup[1] == data_type and tup[2] not in excluded_input_types
-  ]
+import paddle
+from PIL.Image import Image
+from matplotlib import cm
+from matplotlib import figure
+from pathlib import Path
+from paddle import nn
 
 
 
-def numpy_normalised_quantile_loss(y, y_pred, quantile):
-  """Computes normalised quantile loss for numpy arrays.
+class QuantileLoss(nn.Layer):
+    ## From: https://medium.com/the-artificial-impostor/quantile-regression-part-2-6fdbc26b2629
 
-  Uses the q-Risk metric as defined in the "Training Procedure" section of the
-  main TFT paper.
+    def __init__(self, quantiles):
+        ##takes a list of quantiles
+        super().__init__()
+        self.quantiles = quantiles
 
-  Args:
-    y: Targets
-    y_pred: Predictions
-    quantile: Quantile to use for loss calculations (between 0 & 1)
+    def numpy_normalised_quantile_loss(self, y_pred, y, quantile):
+        """Computes normalised quantile loss for numpy arrays.
+        Uses the q-Risk metric as defined in the "Training Procedure" section of the
+        main TFT paper.
+        Args:
+          y: Targets
+          y_pred: Predictions
+          quantile: Quantile to use for loss calculations (between 0 & 1)
+        Returns:
+          Float for normalised quantile loss.
+        """
+        if not isinstance(y_pred, paddle.Tensor):
+            y_pred = paddle.to_tensor(y_pred,paddle.float32)
 
-  Returns:
-    Float for normalised quantile loss.
-  """
-  prediction_underflow = y - y_pred
-  weighted_errors = quantile * np.maximum(prediction_underflow, 0.) \
-      + (1. - quantile) * np.maximum(-prediction_underflow, 0.)
+        if len(y_pred.shape) == 3:
+            ix = self.quantiles.index(quantile)
+            y_pred = y_pred[..., ix]
 
-  quantile_loss = weighted_errors.mean()
-  normaliser = np.abs(y).mean()
+        if not isinstance(y, paddle.Tensor):
+            y = paddle.to_tensor(y,paddle.float32)
 
-  return 2 * quantile_loss / normaliser
+        prediction_underflow = y - y_pred
+        weighted_errors = quantile * paddle.maximum(prediction_underflow, paddle.to_tensor(0.,paddle.float32)) \
+                          + (1. - quantile) * paddle.maximum(-prediction_underflow, paddle.to_tensor(0.))
 
+        quantile_loss = paddle.mean(weighted_errors)
+        normaliser = paddle.abs(y).mean()
 
-# OS related functions.
-def create_folder_if_not_exist(directory):
-  """Creates folder if it doesn't exist.
+        return 2 * quantile_loss / normaliser
 
-  Args:
-    directory: Folder path to create.
-  """
-  # Also creates directories recursively
-  pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
+    def forward(self, preds, target, ret_losses=True):
+        assert target.stop_gradient
+        assert preds.shape[0] == target.shape[0]
+        losses = []
+
+        for i, q in enumerate(self.quantiles):
+            errors = target - preds[:, :, i]
+            losses.append(
+                paddle.maximum(
+                    (q - 1) * errors,
+                    q * errors
+                ).unsqueeze(1))
+        loss = paddle.mean(
+            paddle.sum(paddle.concat(losses, axis=1), axis=1))
+        if ret_losses:
+            return loss, losses
+        return loss
+
 
 def unnormalize_tensor(data_formatter, data, identifier):
     data = pd.DataFrame(
-        data.detach().cpu().numpy(),
+        list(data.numpy()),
         columns=[
             't+{}'.format(i)
             for i in range(data.shape[1])
         ])
 
-    data['identifier'] = int(identifier.item())
+    data['identifier'] = np.array(identifier)
     data = data_formatter.format_predictions(data)
 
     return data.drop(columns=['identifier']).values
+
+
+def symmetric_mean_absolute_percentage_error(forecast, actual):
+    # Symmetric Mean Absolute Percentage Error (SMAPE)
+    sequence_length = forecast.shape[1]
+    sumf = paddle.sum(paddle.abs(forecast - actual) / (paddle.abs(actual) + paddle.abs(forecast)), axis=1)
+    return paddle.mean((2 * sumf) / sequence_length)
+
+
+def plot_temporal_serie(y_pred, y_true):
+    if isinstance(y_pred, paddle.Tensor):
+        y_pred = y_pred.numpy()
+
+    if isinstance(y_true, paddle.Tensor):
+        y_true = y_true.numpy()
+
+    ind = np.random.choice(y_pred.shape[0])
+    plt.plot(y_pred[ind, :, 0], label='pred_1')
+    plt.plot(y_pred[ind, :, 1], label='pred_5')
+    plt.plot(y_pred[ind, :, 2], label='pred_9')
+    plt.plot(y_true[ind, :, 0], label='true')
+    plt.legend()
+    plt.show()
+
+
+def imread(path):
+    """
+    Reads the image located in `path`
+    :param path:
+    :return:
+    """
+    with open(path, 'rb') as f:
+        with PIL.Image.open(f) as img:
+            return img.convert('RGB')
+
+
+def pyplot_to_numpy(pyplot_figure):
+    """
+    Converts a PyPlot figure into a NumPy array
+    :param pyplot_figure: figure you want to convert
+    :return: converted NumPy array
+    """
+    pyplot_figure.canvas.draw()
+    x = np.fromstring(pyplot_figure.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    x = x.reshape(pyplot_figure.canvas.get_width_height()[::-1] + (3,))
+    return x
+
+
+def pyplot_to_tensor(pyplot_figure):
+    """
+    Converts a PyPlot figure into a PyTorch tensor
+    :param pyplot_figure: figure you want to convert
+    :return: converted PyTorch tensor
+    """
+    x = pyplot_to_numpy(pyplot_figure=pyplot_figure)
+    return x
+
+
+def apply_colormap_to_tensor(x, cmap='jet', range=(None, None)):
+    """
+    :param x: Tensor with shape (1, H, W)
+    :param cmap: name of the color map you want to apply
+    :param range: tuple of (minimum possible value in x, maximum possible value in x)
+    :return: Tensor with shape (3, H, W)
+    """
+    cmap = cm.ScalarMappable(cmap=cmap)
+    cmap.set_clim(vmin=range[0], vmax=range[1])
+    x = x.detatch().cpu().numpy()
+    x = x.squeeze()
+    x = cmap.to_rgba(x)[:, :, :-1]
+    return x
+
