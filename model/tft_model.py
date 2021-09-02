@@ -172,10 +172,11 @@ class InterpretableMultiHeadAttention(nn.Layer):
 class Linear(nn.Layer):
     def __init__(self, inp_size, out_size, use_td=False, bias=True):
         super().__init__()
+        weight_attr = paddle.framework.ParamAttr(initializer=paddle.nn.initializer.XavierUniform())
         if not bias:
-            self.linear = nn.Linear(inp_size, out_size, bias_attr=False)
+            self.linear = nn.Linear(inp_size, out_size, bias_attr=False, weight_attr=weight_attr)
         else:
-            self.linear = nn.Linear(inp_size, out_size)
+            self.linear = nn.Linear(inp_size, out_size, weight_attr=weight_attr)
         if use_td:
             self.linear = TimeDistributed(self.linear)
 
@@ -391,8 +392,9 @@ class TFT(nn.Layer):
         self.future_select = TimeVariableSelectionNetwork(self.seq_length-self.encode_length, self.hidden_size, 3, self.hidden_size, self.dropout,self.static_variables*self.hidden_size)
         ### history and feature lstm
         from scipy.stats import ortho_group
-        his_whh = ortho_group.rvs(size=2, dim=640)[0][:,:160]
-        fut_whh = ortho_group.rvs(size=2, dim=640)[0][:,:160]
+        dim = (self.input_size-self.output_size) * self.hidden_size
+        his_whh = ortho_group.rvs(size=2, dim=dim)[0][:,:self.hidden_size]
+        fut_whh = ortho_group.rvs(size=2, dim=dim)[0][:,:self.hidden_size]
         self.history_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False,
             weight_ih_attr = paddle.framework.ParamAttr(name="history_weight_ih",initializer=paddle.nn.initializer.XavierUniform()),
             weight_hh_attr = paddle.framework.ParamAttr(name="history_weight_hh",initializer=paddle.nn.initializer.Assign(his_whh)),

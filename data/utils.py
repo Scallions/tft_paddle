@@ -182,4 +182,4 @@ def logger_config(log_path, logging_name):
 
 
 if __name__ == '__main__':
-    print(csv_path_to_folder('./data/electricity.csv'))
+    print(csv_path_to_folder('./dataset/electricity.csv'))

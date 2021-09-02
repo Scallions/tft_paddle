@@ -1,5 +1,5 @@
 experimentName: TFT              # An optional name to distinguish the experiments
-trialCommand: python train.py      # NOTE: change "python3" to "python" if you are using Windows
+trialCommand: python main.py      # NOTE: change "python3" to "python" if you are using Windows
 trialGpuNumber: 1
 trialConcurrency: 2                # Run 2 trials concurrently
 maxTrialNumber: 30                  # Generate at most 10 trials

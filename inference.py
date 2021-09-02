@@ -50,7 +50,7 @@ class TS(object):
             num_workers=cnf.n_workers, shuffle=False)
 
         # init logging stuffs
-        self.log_path = "log/"
+        self.log_path = "/home/cyf/Downloads/28model/epoch_2/"
         self.log_freq = len(self.test_loader)
         self.train_losses = []
         self.test_loss = []
@@ -95,6 +95,8 @@ class TS(object):
             self.model.eval()
             p10_forecast, p10_forecast, p90_forecast, target = None, None, None, None
 
+            rmse_losses = []
+
             t = time()
             for step, sample in enumerate(self.test_loader):
 
@@ -137,6 +139,10 @@ class TS(object):
                 self.test_losses['p50'].append(self.loss.numpy_normalised_quantile_loss(p50_forecast, target, 0.5))
                 self.test_losses['p90'].append(self.loss.numpy_normalised_quantile_loss(p90_forecast, target, 0.9))
 
+                delta = target-p50_forecast
+                rmse = np.sqrt((delta*delta).mean())
+
+                rmse_losses.append(rmse)
                 self.test_loss.append(loss.item())
                 self.test_smape.append(smape)
 
@@ -154,5 +160,7 @@ class TS(object):
             # log log log
             mean_test_loss = np.mean(self.test_loss)
             mean_smape = np.mean(self.test_smape)
+            mean_rmse = np.mean(rmse_losses)
             print(f'\t● AVG Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
             print(f'\t● AVG SMAPE on TEST-set: {mean_smape:.6f} │ T: {time() - t:.2f} s')
+            print(f"\t● AVG RMSE on TEST-set: {mean_rmse:.6f}")

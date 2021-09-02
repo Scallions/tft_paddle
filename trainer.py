@@ -49,9 +49,10 @@ class Trainer(object):
             raise NameError
 
         # init optimizer
-        self.optimizer = paddle.optimizer.Adam(learning_rate=self.cnf.all_params['lr'],
-                                               parameters=self.model.parameters(),
-                                               grad_clip=paddle.nn.ClipGradByNorm(self.cnf.all_params['max_gradient_norm']))
+        # self.optimizer = paddle.optimizer.Adam(learning_rate=self.cnf.all_params['lr'],
+        #                                        parameters=self.model.parameters(),
+        #                                        grad_clip=paddle.nn.ClipGradByNorm(self.cnf.all_params['max_gradient_norm']))
+        
         self.loss = QuantileLoss(cnf.quantiles)
 
         # init train loader
@@ -67,10 +68,14 @@ class Trainer(object):
         # init logging stuffs
         self.log_path = cnf.exp_log_path
 
+        self.scheduler = paddle.optimizer.lr.CosineAnnealingDecay(learning_rate=self.cnf.all_params['lr'], T_max=len(self.train_loader), eta_min=0.00001, verbose=False)
+        self.optimizer = paddle.optimizer.Adam(learning_rate=self.scheduler,
+                                               parameters=self.model.parameters(),
+                                               grad_clip=paddle.nn.ClipGradByNorm(self.cnf.all_params['max_gradient_norm']))
         self.log_freq = len(self.train_loader)
         self.train_losses = []
         self.test_loss = []
-        self.test_losses = {'p10': [], 'p50': [], 'p90': []}
+        self.test_losses = {'p90': []}
         self.test_smape = []
 
         # starting values
@@ -111,6 +116,10 @@ class Trainer(object):
                 opti_state_dict = paddle.load(ckpt_path)
                 model.set_state_dict(para_state_dict)
                 optimizer.set_state_dict(opti_state_dict)
+
+                iter = resume_model.split('_')[-1]
+                iter = int(iter)
+                return iter
             else:
                 raise ValueError(
                     'Directory of the model needed to resume is not Found: {}'.
@@ -134,22 +143,32 @@ class Trainer(object):
             output = self.model.forward(x)
             # Compute Loss
             loss, _ = self.loss(output.squeeze(), sample['outputs'].squeeze().astype('float32'))
+            if loss.isnan().any().item() == True:
+                exit()
             loss.backward()
             self.train_losses.append(loss.item())
             self.optimizer.step()
 
             if step % self.cnf.all_params['log_step'] == 0:
                 logger.info('[TRAIN] Epoch {} \t Iter {} \t Loss {:.6f}'.format(self.epoch, step+1, loss.item()))
+                # self.test()
+            # print an incredible progress bar
+            # times.append(time() - t)
+            # if self.cnf.log_each_step or (not self.cnf.log_each_step and self.progress_bar.progress == 1):
+            #     print(f'\r{self.progress_bar} '
+            #           f'©¦ Loss: {np.mean(self.train_losses):.6f} '
+            #           f'©¦ ?: {1 / np.mean(times):5.2f} step/s', end='')
+            # self.progress_bar.inc()
 
         # log average loss of this epoch
         mean_epoch_loss = np.mean(self.train_losses)
         self.train_losses = []
 
         # log epoch duration
-        # print(f' │ T: {time() - start_time:.2f} s')
+        # print(f' ©¦ T: {time() - start_time:.2f} s')
 
 
-    def test(self):
+    def test(self, final=False):
         """
         test model on the Test-Set
         """
@@ -173,7 +192,7 @@ class Trainer(object):
 
             output = output.squeeze()
             y, y_pred = sample['outputs'].squeeze().astype('float32'), output
-            if y.isnan().any().item() == True:
+            if y_pred.isnan().any().item() == True:
                 exit()
 
             # Compute loss
@@ -184,13 +203,13 @@ class Trainer(object):
             # De-Normalize to compute metrics
 
             target = unnormalize_tensor(self.data_formatter, y, sample['identifier'][0][0])
-            p10_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 0], sample['identifier'][0][0])
-            p50_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 1], sample['identifier'][0][0])
+            # p10_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 0], sample['identifier'][0][0])
+            # p50_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 1], sample['identifier'][0][0])
             p90_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 2], sample['identifier'][0][0])
 
             # Compute metrics
-            self.test_losses['p10'].append(self.loss.numpy_normalised_quantile_loss(p10_forecast, target, 0.1))
-            self.test_losses['p50'].append(self.loss.numpy_normalised_quantile_loss(p50_forecast, target, 0.5))
+            # self.test_losses['p10'].append(self.loss.numpy_normalised_quantile_loss(p10_forecast, target, 0.1))
+            # self.test_losses['p50'].append(self.loss.numpy_normalised_quantile_loss(p50_forecast, target, 0.5))
             self.test_losses['p90'].append(self.loss.numpy_normalised_quantile_loss(p90_forecast, target, 0.9))
 
             self.test_loss.append(loss.item())
@@ -199,21 +218,27 @@ class Trainer(object):
             #    logger.info('[EVAL] Epoch {} \t Iter {} \t mean P90 Loss {:.6f}'.format(self.epoch, step+1, np.mean(self.test_losses['p90'])))
         # Log stuff
         for k in self.test_losses.keys():
-            mean_test_loss = np.mean(self.test_losses[k])
-            logger.info(f'\t● AVG {k} Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
+            if final:
+                mean_test_loss = np.mean(self.test_losses[k])
+                """@nni.report_final_result(mean_test_loss)"""
+            else:
+                mean_test_loss = np.mean(self.test_losses[k])
+                """@nni.report_intermediate_result(mean_test_loss)"""
+            self.test_losses[k] = []
+            logger.info(f'\t¡ñ AVG {k} Loss on TEST-set: {mean_test_loss:.6f} ©¦ T: {time() - t:.2f} s')
 
         # log log log
         mean_test_loss = np.mean(self.test_loss)
         #mean_smape = np.mean(self.test_smape)
-        logger.info(f'\t● AVG Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
-        #print(f'\t● AVG SMAPE on TEST-set: {mean_smape:.6f} │ T: {time() - t:.2f} s')
+        logger.info(f'\t¡ñ AVG Loss on TEST-set: {mean_test_loss:.6f} ©¦ T: {time() - t:.2f} s')
+        #print(f'\t¡ñ AVG SMAPE on TEST-set: {mean_smape:.6f} ©¦ T: {time() - t:.2f} s')
 
 
         # save best model
         if self.best_test_loss is None or mean_test_loss < self.best_test_loss:
             self.best_test_loss = mean_test_loss
             paddle.save(self.model.state_dict(), self.log_path / self.cnf.exp_name + '_best.pdparams')
-            paddle.save(self.optimizer.state_dict(), self.log_path / self.cnf.exp_name + '_best.pdopt')
+        self.model.train()
 
     def run(self):
         """
@@ -227,3 +252,8 @@ class Trainer(object):
 
             self.epoch += 1
             self.save_model(self.model, self.optimizer, self.log_path, self.epoch)
+
+        
+        # final
+        with paddle.no_grad():
+            self.test(final=True)
