@@ -172,10 +172,11 @@ class InterpretableMultiHeadAttention(nn.Layer):
 class Linear(nn.Layer):
     def __init__(self, inp_size, out_size, use_td=False, bias=True):
         super().__init__()
+        weight_attr = paddle.framework.ParamAttr(initializer=paddle.nn.initializer.XavierUniform())
         if not bias:
-            self.linear = nn.Linear(inp_size, out_size, bias_attr=False)
+            self.linear = nn.Linear(inp_size, out_size, bias_attr=False, weight_attr=weight_attr)
         else:
-            self.linear = nn.Linear(inp_size, out_size)
+            self.linear = nn.Linear(inp_size, out_size, weight_attr=weight_attr)
         if use_td:
             self.linear = TimeDistributed(self.linear)
 
