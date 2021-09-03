@@ -74,9 +74,9 @@ class TS(object):
             print('Resume model from {}'.format(resume_model))
             if os.path.exists(resume_model):
                 resume_model = os.path.normpath(resume_model)
-                ckpt_path = os.path.join(resume_model, 'model.pdparams')
+                ckpt_path = os.path.join(resume_model, 'electricity_best.pdparams')
                 para_state_dict = paddle.load(ckpt_path)
-                ckpt_path = os.path.join(resume_model, 'model.pdopt')
+                ckpt_path = os.path.join(resume_model, 'electricity_best.pdopt')
                 opti_state_dict = paddle.load(ckpt_path)
                 model.set_state_dict(para_state_dict)
                 optimizer.set_state_dict(opti_state_dict)
