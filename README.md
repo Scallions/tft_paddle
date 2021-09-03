@@ -11,7 +11,7 @@
 * Verifying configuration files
 
   ```python
-  python conf/conf.py
+  python config/conf.py
   ```
 
 * Verifying dataset
@@ -34,6 +34,16 @@
 
 ## 实验结果
 ![](images/Figure_1.png)
+
+### 复现结果
+
+|      | tensorflow | paddlepaddle |
+| ---- | ---------- | ------------ |
+| P50  | 0.055      | 0.054124     |
+| P90  | 0.027      | 0.028077     |
+
+
+
 
 ## 参考资料
 - [google-research/tft](https://github.com/google-research/google-research/tree/master/tft)
