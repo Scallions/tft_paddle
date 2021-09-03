@@ -7,17 +7,17 @@ import paddle
 from paddle import optimizer
 from paddle.io import DataLoader
 from model.tft_model import TFT
-from conf import Conf
-from dataset.ts_dataset import TSDataset
-from progress_bar import ProgressBar
-from utils import QuantileLoss, symmetric_mean_absolute_percentage_error, unnormalize_tensor, plot_temporal_serie
-from data_formatters.utils import logger_config
+from config import Conf
+from data.ts_dataset import TSDataset
+from utils.progress_bar import ProgressBar
+from utils.utils import QuantileLoss, symmetric_mean_absolute_percentage_error, unnormalize_tensor, plot_temporal_serie
+from data.utils import logger_config
 from scheduler import CosineAnnealingDecay
-import data_formatters.utils as utils
+import data.utils as utils
 
 if not os.path.isdir('experiment'):
     os.makedirs('experiment')
-logger = logger_config(log_path='experiment/TFTransformer_log9.txt', logging_name='TFTransformer')
+logger = logger_config(log_path='experiment/TFTransformer_log.txt', logging_name='TFTransformer')
 
 class Trainer(object):
     """
@@ -67,8 +67,6 @@ class Trainer(object):
         T_period = [length for _ in range(self.cnf.all_params['num_epochs'])]
         restarts = [length * i for i in range(1, self.cnf.all_params['num_epochs']+1)]
         weights = [1 for _ in range(self.cnf.all_params['num_epochs'])]
-        # init optimizer
-        #self.scheduler = paddle.optimizer.lr.CosineAnnealingDecay(learning_rate=self.cnf.all_params['lr'], T_max=len(self.train_loader)*2, verbose=False)
         self.scheduler = CosineAnnealingDecay(learning_rate=self.cnf.all_params['lr'],
                                               T_period=T_period,
                                               restarts=restarts,
@@ -145,7 +143,6 @@ class Trainer(object):
         #times = []
         for step, sample in enumerate(self.train_loader):
             t = time()
-            # self.optimizer.clear_grad()
             # Feed input to the model
             x = sample['inputs'].astype('float32')
             output = self.model.forward(x)
@@ -192,9 +189,6 @@ class Trainer(object):
 
             # Compute loss
             loss, _ = self.loss(y_pred, y)
-            # smape = symmetric_mean_absolute_percentage_error(output[:, :, 1],
-            #                                                  sample['outputs'][:, :, 0])
-
             # De-Normalize to compute metrics
 
             target = unnormalize_tensor(self.data_formatter, y, sample['identifier'][0][0])

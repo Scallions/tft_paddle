@@ -10,7 +10,7 @@ from inference import TS
 
 @click.command()
 @click.option('--exp_name', type=str, default='electricity')
-@click.option('--conf_file_path', type=str, default='conf/electricity.yaml')
+@click.option('--conf_file_path', type=str, default='config/electricity.yaml')
 @click.option('--seed', type=int, default=None)
 @click.option('--inference', type=bool, default=False)
 def main(exp_name, conf_file_path, seed, inference):

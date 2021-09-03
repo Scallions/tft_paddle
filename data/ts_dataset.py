@@ -28,37 +28,37 @@ class TSDataset(Dataset):
     def train(self):
         max_samples = self.params['train_samples']
 
-        # if path.exists(self.csv + "processed_traindata.npz"):
-        #     f = np.load(self.csv + "processed_traindata.npz", allow_pickle=True)
-        #     self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
-        #         f.files[3]]
-        # else:
-        self.preprocess(self.train_set, max_samples)
-        np.savez(self.csv + "processed_traindata.npz", self.inputs, self.outputs,
+        if path.exists(self.csv + "processed_traindata.npz"):
+            f = np.load(self.csv + "processed_traindata.npz", allow_pickle=True)
+            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
+                f.files[3]]
+        else:
+            self.preprocess(self.train_set, max_samples)
+            np.savez(self.csv + "processed_traindata.npz", self.inputs, self.outputs,
                  self.time,
                  self.identifiers)
 
     def test(self):
         max_samples = self.params['test_samples']
-        # if path.exists(self.csv + "processed_testdata.npz"):
-        #     f = np.load(self.csv + "processed_testdata.npz", allow_pickle=True)
-        #     self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
-        #         f.files[3]]
-        # else:
-        self.preprocess(self.test_set, max_samples)
-        np.savez(self.csv + "processed_testdata.npz", self.inputs, self.outputs,
+        if path.exists(self.csv + "processed_testdata.npz"):
+            f = np.load(self.csv + "processed_testdata.npz", allow_pickle=True)
+            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
+                f.files[3]]
+        else:
+            self.preprocess(self.test_set, max_samples)
+            np.savez(self.csv + "processed_testdata.npz", self.inputs, self.outputs,
                  self.time,
                  self.identifiers)
 
     def val(self):
         max_samples = self.params['val_samples']
-        # if path.exists(self.csv + "processed_validdata.npz"):
-        #     f = np.load(self.csv + "processed_validdata.npz", allow_pickle=True)
-        #     self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
-        #         f.files[3]]
-        # else:
-        self.preprocess(self.valid_set, max_samples)
-        np.savez(self.csv + "processed_validdata.npz", self.inputs, self.outputs,
+        if path.exists(self.csv + "processed_validdata.npz"):
+            f = np.load(self.csv + "processed_validdata.npz", allow_pickle=True)
+            self.inputs, self.outputs, self.time, self.identifiers = f[f.files[0]], f[f.files[1]], f[f.files[2]], f[
+                f.files[3]]
+        else:
+            self.preprocess(self.valid_set, max_samples)
+            np.savez(self.csv + "processed_validdata.npz", self.inputs, self.outputs,
                  self.time,
                  self.identifiers)
 

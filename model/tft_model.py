@@ -177,10 +177,11 @@ class InterpretableMultiHeadAttention(nn.Layer):
 class Linear(nn.Layer):
     def __init__(self, inp_size, out_size, use_td=False, bias=True):
         super().__init__()
+        weight_attr = paddle.framework.ParamAttr(initializer=paddle.nn.initializer.XavierUniform())
         if not bias:
-            self.linear = nn.Linear(inp_size, out_size, bias_attr=False)
+            self.linear = nn.Linear(inp_size, out_size, bias_attr=False, weight_attr=weight_attr)
         else:
-            self.linear = nn.Linear(inp_size, out_size)
+            self.linear = nn.Linear(inp_size, out_size, weight_attr=weight_attr)
         if use_td:
             self.linear = TimeDistributed(self.linear)
 
@@ -293,9 +294,6 @@ class StaticVariableSelectionNetwork(nn.Layer):
 
         trans_emb_list = []
         for i in range(self.num_inputs):
-            # trans_emb_list.append(
-            #     self.single_variable_grns[i](embedding[:, :, (i * self.input_size): (i + 1) * self.input_size]))
-            ## REVIEW
             trans_emb_list.append(
                 self.single_variable_grns[i](embedding[:, i: i + 1, :]))
         transformed_embbeding = paddle.concat(trans_emb_list, axis=1)
@@ -313,7 +311,6 @@ class TimeVariableSelectionNetwork(nn.Layer):
         self.embedding_dim = embedding_dim
         self.dropout = dropout
         self.context = context
-        self.flatten = nn.Flatten()
         if self.context is not None:
             self.flattened_grn = GRN(self.embedding_dim * self.input_nums, self.input_nums,
                                      self.hidden_size, self.dropout, True, self.context)
@@ -327,7 +324,6 @@ class TimeVariableSelectionNetwork(nn.Layer):
         self.softmax = nn.Softmax()
 
     def forward(self, embedding, context=None):
-        # flatten = self.flatten(embedding)
         flatten = embedding.reshape([-1, self.time_steps, self.embedding_dim * self.input_nums])
         context = context.unsqueeze(1)
         if context is not None:
@@ -430,7 +426,6 @@ class TFT(nn.Layer):
                                   add_ctx=self.static_variables * self.hidden_size)
         ### atten
         self.attn_layer = InterpretableMultiHeadAttention(self.attn_heads, self.hidden_size, dropout_rate=self.dropout)
-        # self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
         self.attn_glu = GLU(self.hidden_size, self.hidden_size)
         self.attn_add_norm = Add_Norm(self.hidden_size)
         ## position wise feed-forward
@@ -470,7 +465,6 @@ class TFT(nn.Layer):
         for i in range(num_cat):
             if i not in self.know_cat \
                     and i + num_reg not in self.input_obs_loc:
-                # e = self.cat_embeddings[i](cat_inps[:, :, i])
                 e = emb_cat_inps[:, :, i]
                 wired_embeddings.append(e)
 
@@ -546,9 +540,7 @@ class TFT(nn.Layer):
         enriched = self.static_enh_grn(temporal_feature_layer, expanded_static_context)
         ## temporal sefl-attention
         ### decoder self attention
-        # mask = get_decoder_mask(enriched)
         mask = paddle.cumsum(paddle.ones((enriched.shape[0], 1, 1)) * paddle.eye(enriched.shape[1]), 1)
-        # mask = paddle.cumsum(paddle.eye(enriched.shape[1]).reshape((1, enriched.shape[1], enriched.shape[1])).repeat(enriched.shape[0], 1, 1), 1)
         x = self.attn_layer(enriched, enriched, enriched,
                             attn_mask=mask)
         x = self.attn_glu(x)
