@@ -6,16 +6,18 @@ import numpy as np
 import paddle
 from paddle import optimizer
 from paddle.io import DataLoader
-from model.tft_model import TFT
-from config import Conf
-from data.ts_dataset import TSDataset
-from utils.progress_bar import ProgressBar
-from utils.utils import QuantileLoss, symmetric_mean_absolute_percentage_error, unnormalize_tensor, plot_temporal_serie
-from data.utils import logger_config
-import data.utils as utils
+from tft_model_paddle import TFT
+from conf import Conf
+from dataset.ts_dataset import TSDataset
+from progress_bar import ProgressBar
+from utils import QuantileLoss, symmetric_mean_absolute_percentage_error, unnormalize_tensor, plot_temporal_serie
+from data_formatters.utils import logger_config
+from scheduler import CosineAnnealingDecay
+import data_formatters.utils as utils
 
-
-logger = logger_config(log_path='experiment/TFTransformer_log.txt', logging_name='TFTransformer')
+if not os.path.isdir('experiment'):
+    os.makedirs('experiment')
+logger = logger_config(log_path='experiment/TFTransformer_log9.txt', logging_name='TFTransformer')
 
 class Trainer(object):
     """
@@ -48,10 +50,6 @@ class Trainer(object):
         else:
             raise NameError
 
-        # init optimizer
-        self.optimizer = paddle.optimizer.Adam(learning_rate=self.cnf.all_params['lr'],
-                                               parameters=self.model.parameters(),
-                                               grad_clip=paddle.nn.ClipGradByNorm(self.cnf.all_params['max_gradient_norm']))
         self.loss = QuantileLoss(cnf.quantiles)
 
         # init train loader
@@ -63,11 +61,26 @@ class Trainer(object):
         self.test_loader = DataLoader(
             dataset=dataset_test, batch_size=cnf.batch_size,
             num_workers=cnf.n_workers, shuffle=False)
+        self.log_freq = len(self.train_loader)
+        # init optimizer
+        length = len(self.train_loader)
+        T_period = [length for _ in range(self.cnf.all_params['num_epochs'])]
+        restarts = [length * i for i in range(1, self.cnf.all_params['num_epochs']+1)]
+        weights = [1 for _ in range(self.cnf.all_params['num_epochs'])]
+        # init optimizer
+        #self.scheduler = paddle.optimizer.lr.CosineAnnealingDecay(learning_rate=self.cnf.all_params['lr'], T_max=len(self.train_loader)*2, verbose=False)
+        self.scheduler = CosineAnnealingDecay(learning_rate=self.cnf.all_params['lr'],
+                                              T_period=T_period,
+                                              restarts=restarts,
+                                              weights=weights,
+                                              eta_min=0.00001)
+        self.optimizer = paddle.optimizer.Adam(learning_rate=self.scheduler,
+                                               parameters=self.model.parameters(),
+                                               grad_clip=paddle.nn.ClipGradByNorm(self.cnf.all_params['max_gradient_norm']))
 
         # init logging stuffs
         self.log_path = cnf.exp_log_path
 
-        self.log_freq = len(self.train_loader)
         self.train_losses = []
         self.test_loss = []
         self.test_losses = {'p10': [], 'p50': [], 'p90': []}
@@ -111,6 +124,10 @@ class Trainer(object):
                 opti_state_dict = paddle.load(ckpt_path)
                 model.set_state_dict(para_state_dict)
                 optimizer.set_state_dict(opti_state_dict)
+
+                iter = resume_model.split('_')[-1]
+                iter = int(iter)
+                return iter
             else:
                 raise ValueError(
                     'Directory of the model needed to resume is not Found: {}'.
@@ -128,7 +145,7 @@ class Trainer(object):
         #times = []
         for step, sample in enumerate(self.train_loader):
             t = time()
-            self.optimizer.clear_grad()
+            # self.optimizer.clear_grad()
             # Feed input to the model
             x = sample['inputs'].astype('float32')
             output = self.model.forward(x)
@@ -137,16 +154,15 @@ class Trainer(object):
             loss.backward()
             self.train_losses.append(loss.item())
             self.optimizer.step()
-
+            self.optimizer.clear_grad()
+            self.scheduler.step()
+            cur_lr = self.scheduler.get_lr()
             if step % self.cnf.all_params['log_step'] == 0:
-                logger.info('[TRAIN] Epoch {} \t Iter {} \t Loss {:.6f}'.format(self.epoch, step+1, loss.item()))
+                logger.info('[TRAIN] Epoch {} \t Iter {} \t Lr {} \t Loss {:.6f}'.format(self.epoch, step+1, cur_lr, loss.item()))
 
         # log average loss of this epoch
         mean_epoch_loss = np.mean(self.train_losses)
         self.train_losses = []
-
-        # log epoch duration
-        # print(f' │ T: {time() - start_time:.2f} s')
 
 
     def test(self):
@@ -173,8 +189,6 @@ class Trainer(object):
 
             output = output.squeeze()
             y, y_pred = sample['outputs'].squeeze().astype('float32'), output
-            if y.isnan().any().item() == True:
-                exit()
 
             # Compute loss
             loss, _ = self.loss(y_pred, y)
@@ -184,28 +198,27 @@ class Trainer(object):
             # De-Normalize to compute metrics
 
             target = unnormalize_tensor(self.data_formatter, y, sample['identifier'][0][0])
-            p10_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 0], sample['identifier'][0][0])
-            p50_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 1], sample['identifier'][0][0])
+            #p10_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 0], sample['identifier'][0][0])
+            #p50_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 1], sample['identifier'][0][0])
             p90_forecast = unnormalize_tensor(self.data_formatter, y_pred[:, :, 2], sample['identifier'][0][0])
 
             # Compute metrics
-            self.test_losses['p10'].append(self.loss.numpy_normalised_quantile_loss(p10_forecast, target, 0.1))
-            self.test_losses['p50'].append(self.loss.numpy_normalised_quantile_loss(p50_forecast, target, 0.5))
+            #self.test_losses['p10'].append(self.loss.numpy_normalised_quantile_loss(p10_forecast, target, 0.1))
+            #self.test_losses['p50'].append(self.loss.numpy_normalised_quantile_loss(p50_forecast, target, 0.5))
             self.test_losses['p90'].append(self.loss.numpy_normalised_quantile_loss(p90_forecast, target, 0.9))
 
             self.test_loss.append(loss.item())
             #self.test_smape.append(smape)
-            #if step % 200 == 0:
-            #    logger.info('[EVAL] Epoch {} \t Iter {} \t mean P90 Loss {:.6f}'.format(self.epoch, step+1, np.mean(self.test_losses['p90'])))
+ 
         # Log stuff
-        for k in self.test_losses.keys():
-            mean_test_loss = np.mean(self.test_losses[k])
-            logger.info(f'\t● AVG {k} Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
+        # for k in self.test_losses.keys():
+        mean_test_loss = np.mean(self.test_losses['p90'])
+        logger.info(f'[TEST] AVG p90 Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
 
         # log log log
         mean_test_loss = np.mean(self.test_loss)
         #mean_smape = np.mean(self.test_smape)
-        logger.info(f'\t● AVG Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
+        logger.info(f'[TEST] AVG Loss on TEST-set: {mean_test_loss:.6f} │ T: {time() - t:.2f} s')
         #print(f'\t● AVG SMAPE on TEST-set: {mean_smape:.6f} │ T: {time() - t:.2f} s')
 
 
@@ -213,7 +226,7 @@ class Trainer(object):
         if self.best_test_loss is None or mean_test_loss < self.best_test_loss:
             self.best_test_loss = mean_test_loss
             paddle.save(self.model.state_dict(), self.log_path / self.cnf.exp_name + '_best.pdparams')
-            paddle.save(self.optimizer.state_dict(), self.log_path / self.cnf.exp_name + '_best.pdopt')
+            paddle.save(self.optimizer.state_dict(),self.log_path / self.cnf.exp_name + '_best.pdopt')
 
     def run(self):
         """
