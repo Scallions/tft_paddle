@@ -3,6 +3,7 @@ import paddle
 import paddle.nn as nn
 import json
 
+
 ## quantileloss
 class QuantileLoss(nn.Layer):
     def __init__(self, quantiles):
@@ -14,20 +15,22 @@ class QuantileLoss(nn.Layer):
         assert preds.shape[0] == target.shape[0]
         losses = []
         for i, q in enumerate(self.quantiles):
-            errors = target - preds[:,i]
-            left = (1-q) * nn.functional.relu(-errors)
-            right = q * nn.functional.relu(errors) 
+            errors = target - preds[:, i]
+            left = (1 - q) * nn.functional.relu(-errors)
+            right = q * nn.functional.relu(errors)
             losses.append((left + right).unsqueeze(1))
-        loss = paddle.mean(paddle.sum(paddle.concat(losses,axis=1),axis=1))
+        loss = paddle.mean(paddle.sum(paddle.concat(losses, axis=1), axis=1))
         return loss
+
 
 class Embedding(nn.Layer):
     def __init__(self, num_embeddings, embedding_dim, padding_idx=None, sparse=False, weight_attr=None, name=None):
         super().__init__()
         self.emb = nn.Embedding(num_embeddings, embedding_dim, padding_idx, sparse, weight_attr, name)
-    
+
     def forward(self, x):
         return self.emb(x.astype('int64'))
+
 
 class TimeDistributed(nn.Layer):
     def __init__(self, module, batch_first=True):
@@ -39,13 +42,13 @@ class TimeDistributed(nn.Layer):
         if len(x.shape) <= 2:
             return self.module(x)
         # Squash samples and timesteps into a single axis
-        x_reshape = x.reshape((-1,x.shape[-1]))
+        x_reshape = x.reshape((-1, x.shape[-1]))
         y = self.module(x_reshape)
         # We have to reshape Y
         if self.batch_first:
-            y = y.reshape((x.shape[0],-1,y.shape[-1]))
+            y = y.reshape((x.shape[0], -1, y.shape[-1]))
         else:
-            y = y.reshape((-1,x.shape[1],y.shape[-1]))
+            y = y.reshape((-1, x.shape[1], y.shape[-1]))
         return y
 
 
@@ -72,8 +75,8 @@ class ScaledDotProductAttention(nn.Layer):
         Returns:
             Tuple of (layer outputs, attention weights)
         """
-        attn = paddle.bmm(q,k.transpose([0,2,1])) # shape=(batch, q, k)
-        temper = k.shape[-1]**0.5
+        attn = paddle.bmm(q, k.transpose([0, 2, 1]))  # shape=(batch, q, k)
+        temper = k.shape[-1] ** 0.5
         attn = attn / temper
         if mask is not None:
             # attn = attn.masked_fill(mask.bool(), -1e9)
@@ -84,13 +87,14 @@ class ScaledDotProductAttention(nn.Layer):
             ## attn = paddle.masked_selet(attn, mask.bool())
             ## google
             # REVIEW
-            mask = -1e9 * (1-mask)
+            mask = -1e9 * (1 - mask)
             attn = attn + mask
 
         attn = self.activation(attn)
         attn = self.dropout(attn)
-        output = paddle.bmm(attn,v)
+        output = paddle.bmm(attn, v)
         return output, attn
+
 
 class InterpretableMultiHeadAttention(nn.Layer):
     """Defines interpretable multi-head attention layer.
@@ -169,19 +173,20 @@ class InterpretableMultiHeadAttention(nn.Layer):
         # return outputs, attn
         return outputs
 
+
 class Linear(nn.Layer):
     def __init__(self, inp_size, out_size, use_td=False, bias=True):
         super().__init__()
-        weight_attr = paddle.framework.ParamAttr(initializer=paddle.nn.initializer.XavierUniform())
         if not bias:
-            self.linear = nn.Linear(inp_size, out_size, bias_attr=False, weight_attr=weight_attr)
+            self.linear = nn.Linear(inp_size, out_size, bias_attr=False)
         else:
-            self.linear = nn.Linear(inp_size, out_size, weight_attr=weight_attr)
+            self.linear = nn.Linear(inp_size, out_size)
         if use_td:
             self.linear = TimeDistributed(self.linear)
 
     def forward(self, x):
         return self.linear(x)
+
 
 class GLU(nn.Layer):
     # Gated Linear Unit
@@ -203,6 +208,7 @@ class GLU(nn.Layer):
         sig = self.sigmoid(self.fc2(x))
         return paddle.multiply(sig, fc1)
 
+
 class Add_Norm(nn.Layer):
     def __init__(self, size):
         super().__init__()
@@ -211,10 +217,12 @@ class Add_Norm(nn.Layer):
     def forward(self, x, skip):
         return self.layer_norm(x + skip)
 
+
 class GRN(nn.Layer):
-    """ 
+    """
     Gated Residual Network
     """
+
     def __init__(self, input_size, output_size, hidden_state_size, dropout, use_td=False, add_ctx=None):
         super().__init__()
         self.input_size = input_size
@@ -225,10 +233,10 @@ class GRN(nn.Layer):
         ## skip connection
         if self.input_size != self.output_size:
             self.skip_layer = Linear(self.input_size, self.output_size, use_td)
-        
+
         ## feedforward network
         self.hidden_layer = Linear(self.input_size, self.hidden_state_size, use_td)
-        
+
         self.add_ctx = None
         if add_ctx is not None:
             # self.add_ctx = Linear(hidden_state_size, hidden_state_size, use_td)
@@ -253,6 +261,7 @@ class GRN(nn.Layer):
         gating = self.gating_layer(hidden)
         return self.add_norm(gating, skip)
 
+
 class StaticVariableSelectionNetwork(nn.Layer):
     def __init__(self, input_size, num_inputs, hidden_size, dropout, context=None):
         super().__init__()
@@ -264,10 +273,10 @@ class StaticVariableSelectionNetwork(nn.Layer):
         self.flatten = nn.Flatten()
         if self.context is not None:
             self.flattened_grn = GRN(self.num_inputs * self.input_size, self.num_inputs,
-                                                      self.hidden_size, self.dropout, self.context)
+                                     self.hidden_size, self.dropout, self.context)
         else:
             self.flattened_grn = GRN(self.num_inputs * self.input_size, self.num_inputs,
-                                                      self.hidden_size, self.dropout)
+                                     self.hidden_size, self.dropout)
         self.single_variable_grns = nn.LayerList()
         for i in range(self.num_inputs):
             self.single_variable_grns.append(
@@ -275,7 +284,7 @@ class StaticVariableSelectionNetwork(nn.Layer):
         self.softmax = nn.Softmax()
 
     def forward(self, embedding, context=None):
-        flatten = self.flatten(embedding) # b 160
+        flatten = self.flatten(embedding)  # b 160
         if context is not None:
             mlp_outputs = self.flattened_grn(flatten, context)
         else:
@@ -294,6 +303,7 @@ class StaticVariableSelectionNetwork(nn.Layer):
         static_vec = paddle.sum(combined, axis=1)
         return static_vec, sparse_weights
 
+
 class TimeVariableSelectionNetwork(nn.Layer):
     def __init__(self, time_steps, embedding_dim, input_nums, hidden_size, dropout, context=None):
         super().__init__()
@@ -306,10 +316,10 @@ class TimeVariableSelectionNetwork(nn.Layer):
         self.flatten = nn.Flatten()
         if self.context is not None:
             self.flattened_grn = GRN(self.embedding_dim * self.input_nums, self.input_nums,
-                                                      self.hidden_size, self.dropout,True, self.context)
+                                     self.hidden_size, self.dropout, True, self.context)
         else:
             self.flattened_grn = GRN(self.embedding_dim * self.input_nums, self.input_nums,
-                                                      self.hidden_size, self.dropout, True)
+                                     self.hidden_size, self.dropout, True)
         self.single_variable_grns = nn.LayerList()
         for i in range(self.input_nums):
             self.single_variable_grns.append(
@@ -334,6 +344,7 @@ class TimeVariableSelectionNetwork(nn.Layer):
         combined = paddle.multiply(sparse_weights, transformed_embbeding)
         static_vec = paddle.sum(combined, axis=-1)
         return static_vec, sparse_weights
+
 
 class TFT(nn.Layer):
     def __init__(self, raw_params):
@@ -360,7 +371,6 @@ class TFT(nn.Layer):
         self.attn_heads = int(params['num_heads'])
         self.num_quantiles = len(list(params['quantiles']))
 
-
         self.encode_length = int(params['num_encoder_steps'])
         self.seq_length = int(params['total_time_steps'])
         ## init embddings
@@ -382,31 +392,42 @@ class TFT(nn.Layer):
             emb = Linear(1, self.hidden_size, use_td=True)
             self.reg_embedding_layers.append(emb)
         ### static variable select
-        self.static_select = StaticVariableSelectionNetwork(self.hidden_size, self.static_variables, self.hidden_size, self.dropout)
+        self.static_select = StaticVariableSelectionNetwork(self.hidden_size, self.static_variables, self.hidden_size,
+                                                            self.dropout)
         self.static_grn1 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         self.static_grn2 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         self.static_grn3 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         self.static_grn4 = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, False)
         ### hisotry and feature select
-        self.history_select = TimeVariableSelectionNetwork(self.encode_length, self.hidden_size, 4, self.hidden_size, self.dropout, self.static_variables*self.hidden_size)
-        self.future_select = TimeVariableSelectionNetwork(self.seq_length-self.encode_length, self.hidden_size, 3, self.hidden_size, self.dropout,self.static_variables*self.hidden_size)
+        self.history_select = TimeVariableSelectionNetwork(self.encode_length, self.hidden_size, 4, self.hidden_size,
+                                                           self.dropout, self.static_variables * self.hidden_size)
+        self.future_select = TimeVariableSelectionNetwork(self.seq_length - self.encode_length, self.hidden_size, 3,
+                                                          self.hidden_size, self.dropout,
+                                                          self.static_variables * self.hidden_size)
         ### history and feature lstm
         from scipy.stats import ortho_group
-        his_whh = ortho_group.rvs(size=2, dim=640)[0][:,:160]
-        fut_whh = ortho_group.rvs(size=2, dim=640)[0][:,:160]
-        self.history_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False,
-            weight_ih_attr = paddle.framework.ParamAttr(name="history_weight_ih",initializer=paddle.nn.initializer.XavierUniform()),
-            weight_hh_attr = paddle.framework.ParamAttr(name="history_weight_hh",initializer=paddle.nn.initializer.Assign(his_whh)),
-            )
-        self.future_lstm = nn.LSTM(self.hidden_size, self.hidden_size,time_major=False,
-            weight_ih_attr = paddle.framework.ParamAttr(name="future_weight_ih",initializer=paddle.nn.initializer.XavierUniform()),
-            weight_hh_attr = paddle.framework.ParamAttr(name="future_weight_hh",initializer=paddle.nn.initializer.Assign(fut_whh)),
-            )
+        his_whh = ortho_group.rvs(size=2, dim=640)[0][:, :160]
+        fut_whh = ortho_group.rvs(size=2, dim=640)[0][:, :160]
+        self.history_lstm = nn.LSTM(self.hidden_size, self.hidden_size, time_major=False,
+                                    weight_ih_attr=paddle.framework.ParamAttr(name="history_weight_ih",
+                                                                              initializer=paddle.nn.initializer.XavierUniform()),
+                                    weight_hh_attr=paddle.framework.ParamAttr(name="history_weight_hh",
+                                                                              initializer=paddle.nn.initializer.Assign(
+                                                                                  his_whh)),
+                                    )
+        self.future_lstm = nn.LSTM(self.hidden_size, self.hidden_size, time_major=False,
+                                   weight_ih_attr=paddle.framework.ParamAttr(name="future_weight_ih",
+                                                                             initializer=paddle.nn.initializer.XavierUniform()),
+                                   weight_hh_attr=paddle.framework.ParamAttr(name="future_weight_hh",
+                                                                             initializer=paddle.nn.initializer.Assign(
+                                                                                 fut_whh)),
+                                   )
         ### lstm glu add_and_norm
         self.lstm_glu = GLU(self.hidden_size, self.hidden_size, self.dropout)
         self.lstm_add_norm = Add_Norm(self.hidden_size)
-        ### static encrichemtn 
-        self.static_enh_grn = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, True, add_ctx=self.static_variables*self.hidden_size)
+        ### static encrichemtn
+        self.static_enh_grn = GRN(self.hidden_size, self.hidden_size, self.hidden_size, self.dropout, True,
+                                  add_ctx=self.static_variables * self.hidden_size)
         ### atten
         self.attn_layer = InterpretableMultiHeadAttention(self.attn_heads, self.hidden_size, dropout_rate=self.dropout)
         # self.attn_layer = nn.MultiHeadAttention(self.hidden_size, self.attn_heads, self.dropout)
@@ -422,41 +443,42 @@ class TFT(nn.Layer):
     def forward(self, x):
         # inputs = x['inputs'] # b t l b 192 5
         inputs = x
-        num_cat = len(self.cat_counts) # 类型变量数 1 
-        num_reg = self.input_size - num_cat # 标量变量数 4
-        num_sta = self.static_variables # 统计变量数 1
-        reg_inps = inputs[:,:,:num_reg] # b t l   b 192 4
-        cat_inps = inputs[:,:,num_reg:] # b t l   b 192 1
+        num_cat = len(self.cat_counts)  # 类型变量数 1
+        num_reg = self.input_size - num_cat  # 标量变量数 4
+        num_sta = self.static_variables  # 统计变量数 1
+        reg_inps = inputs[:, :, :num_reg]  # b t l   b 192 4
+        cat_inps = inputs[:, :, num_reg:]  # b t l   b 192 1
         ## embedding inputs
         ### cat emb
         emb_cat_inps = [
-            self.cat_embeddings[i](cat_inps[:,:,i]) # b 192 160   params_count 59040
+            self.cat_embeddings[i](cat_inps[:, :, i])  # b 192 160   params_count 59040
             for i in range(num_cat)
         ]
         ### sta emb
-        sta_inps = [ self.static_embedding_layers[i](x['identifier'][:, 0, i]) for i in range(num_reg) if i in self.static_loc] \
-             + [ emb_cat_inps[i][:,0,:] for i in range(num_cat) if i+num_reg in self.static_loc] # b 160
-        sta_inps = paddle.stack(sta_inps, axis=1) # b l d  b 1 160
+        sta_inps = [self.static_embedding_layers[i](x['identifier'][:, 0, i]) for i in range(num_reg) if
+                    i in self.static_loc] \
+                   + [emb_cat_inps[i][:, 0, :] for i in range(num_cat) if i + num_reg in self.static_loc]  # b 160
+        sta_inps = paddle.stack(sta_inps, axis=1)  # b l d  b 1 160
         ### real emb
         obs_inps = [
-            self.reg_embedding_layers[i](reg_inps[:,:,i:i+1])
+            self.reg_embedding_layers[i](reg_inps[:, :, i:i + 1])
             for i in self.input_obs_loc
         ]
-        obs_inps = paddle.stack(obs_inps, axis=-1) # B T D L
+        obs_inps = paddle.stack(obs_inps, axis=-1)  # B T D L
         ### split unkown inp, kown inp
         wired_embeddings = []
         for i in range(num_cat):
             if i not in self.know_cat \
-                and  i + num_reg  not in self.input_obs_loc:
+                    and i + num_reg not in self.input_obs_loc:
                 # e = self.cat_embeddings[i](cat_inps[:, :, i])
-                e = emb_cat_inps[:,:,i]
+                e = emb_cat_inps[:, :, i]
                 wired_embeddings.append(e)
 
         unknow_inps = []
         for i in range(reg_inps.shape[-1]):
             if i not in self.know_reg \
-                and i not in self.input_obs_loc:
-                e = self.reg_embedding_layers[i](reg_inps[:,:, i:i + 1])
+                    and i not in self.input_obs_loc:
+                e = self.reg_embedding_layers[i](reg_inps[:, :, i:i + 1])
                 unknow_inps.append(e)
         if unknow_inps + wired_embeddings:
             unknow_inps = paddle.stack(
@@ -465,7 +487,7 @@ class TFT(nn.Layer):
             unknow_inps = None
         # A priori known inputs
         known_regular_inputs = [
-            self.reg_embedding_layers[i](reg_inps[:,:, i:i + 1])
+            self.reg_embedding_layers[i](reg_inps[:, :, i:i + 1])
             for i in self.know_reg
             if i not in self.static_loc
         ]
@@ -476,19 +498,18 @@ class TFT(nn.Layer):
         ]
         know_inps = paddle.stack(known_regular_inputs + known_categorical_inputs, axis=-1)
 
-
         if unknow_inps is None:
             history_inps = paddle.concat([
-                know_inps[:,:self.encode_length, :],
-                obs_inps[:,:self.encode_length,:]
-                ], axis=-1)
+                know_inps[:, :self.encode_length, :],
+                obs_inps[:, :self.encode_length, :]
+            ], axis=-1)
         else:
             history_inps = paddle.concat([
                 unknow_inps[:, :self.encode_length, :],
-                know_inps[:,:self.encode_length, :],
-                obs_inps[:,:self.encode_length,:]
-                ], axis=-1)
-        
+                know_inps[:, :self.encode_length, :],
+                obs_inps[:, :self.encode_length, :]
+            ], axis=-1)
+
         future_inps = know_inps[:, self.encode_length:, :]
 
         ## static variable selection
@@ -501,20 +522,20 @@ class TFT(nn.Layer):
 
         ## variable selection
         historical_features, historical_flags = self.history_select(
-        history_inps, static_context_variable_selection) # B T Hide
-        future_features, future_flags = self.future_select(future_inps, static_context_variable_selection) # B T Hide
+            history_inps, static_context_variable_selection)  # B T Hide
+        future_features, future_flags = self.future_select(future_inps, static_context_variable_selection)  # B T Hide
 
         # LSTM layer
         ## lstm encoder
         history_lstm, (state_h, state_c) \
-        = self.history_lstm(historical_features,
-                                      initial_states=[static_context_state_h.unsqueeze(0),
-                                                     static_context_state_c.unsqueeze(0)])
+            = self.history_lstm(historical_features,
+                                initial_states=[static_context_state_h.unsqueeze(0),
+                                                static_context_state_c.unsqueeze(0)])
         ## lstm decoder
         future_lstm, _ = self.future_lstm(
-        future_features, initial_states=[state_h, state_c])
+            future_features, initial_states=[state_h, state_c])
         ## apply gated skip connection
-        lstm_layer = paddle.concat([history_lstm, future_lstm], axis=1) # B T H
+        lstm_layer = paddle.concat([history_lstm, future_lstm], axis=1)  # B T H
         lstm_layer = self.lstm_glu(lstm_layer)
         input_embeddings = paddle.concat([historical_features, future_features], axis=1)
         temporal_feature_layer = self.lstm_add_norm(lstm_layer, input_embeddings)
@@ -522,14 +543,14 @@ class TFT(nn.Layer):
         # temporal fusion decoder
         ## static encrichemtn layers
         expanded_static_context = static_context_enrichment.unsqueeze(axis=1)
-        enriched = self.static_enh_grn(temporal_feature_layer,expanded_static_context)
+        enriched = self.static_enh_grn(temporal_feature_layer, expanded_static_context)
         ## temporal sefl-attention
         ### decoder self attention
         # mask = get_decoder_mask(enriched)
-        mask = paddle.cumsum(paddle.ones((enriched.shape[0],1,1))*paddle.eye(enriched.shape[1]), 1)
+        mask = paddle.cumsum(paddle.ones((enriched.shape[0], 1, 1)) * paddle.eye(enriched.shape[1]), 1)
         # mask = paddle.cumsum(paddle.eye(enriched.shape[1]).reshape((1, enriched.shape[1], enriched.shape[1])).repeat(enriched.shape[0], 1, 1), 1)
         x = self.attn_layer(enriched, enriched, enriched,
-                          attn_mask=mask)
+                            attn_mask=mask)
         x = self.attn_glu(x)
         x = self.attn_add_norm(x, enriched)
         ## position wise feed-forward
@@ -538,6 +559,6 @@ class TFT(nn.Layer):
         # output
         decoder = self.out_glu(decoder)
         transformer_layer = self.out_add_norm(decoder, temporal_feature_layer)
-        outputs = self.out_layer(transformer_layer[:,self.encode_length:,:])
+        outputs = self.out_layer(transformer_layer[:, self.encode_length:, :])
 
         return outputs
