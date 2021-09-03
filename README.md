@@ -2,7 +2,10 @@
 ### 基于Paddle实现论文: [Temporal Fusion Transformers for Interpretable Multi-horizon Time Series Forecasting](https://arxiv.org/pdf/1912.09363.pdf)
 ### 数据集：[Electricity dataset](https://archive.ics.uci.edu/ml/machine-learning-databases/00321/LD2011_2014.txt.zip)
 
+### You can run it on aistudio[https://aistudio.baidu.com/aistudio/projectdetail/2335960]
+
 * Convert TXT files to CSV files
+* We have already provided a csv file dataset so you can skip this step
 
   ``` python
   python scripts/convert_data.py
