@@ -6,7 +6,7 @@ import numpy as np
 import paddle
 from paddle import optimizer
 from paddle.io import DataLoader
-from tft_model_paddle import TFT
+from model.tft_model import TFT
 from conf import Conf
 from dataset.ts_dataset import TSDataset
 from progress_bar import ProgressBar
