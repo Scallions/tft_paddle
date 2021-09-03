@@ -9,7 +9,7 @@ from inference import TS
 
 
 @click.command()
-@click.option('--exp_name', type=str, default='electricity')
+@click.option('--exp_name', type=str, default='electricity@9416')
 @click.option('--conf_file_path', type=str, default='config/electricity.yaml')
 @click.option('--seed', type=int, default=None)
 @click.option('--inference', type=bool, default=False)
