@@ -1,7 +1,7 @@
 #Hyper Params
 batch_size: 64
 lr: 0.001
-num_epochs: 20
+num_epochs: 10
 n_workers: 0
 model: tf_transformer
 loader: base
@@ -9,9 +9,9 @@ log_step: 200
 
 # Dataset
 ds_name: electricity
-train_samples: 450
-test_samples: 500
-val_samples: 500
+train_samples: 450000
+test_samples: 50000
+val_samples: 50000
 input_size: 5
 output_size: 1
 total_time_steps: 192
@@ -38,7 +38,7 @@ batch_first: true
 early_stopping_patience: 5
 hidden_layer_size: 160
 stack_size: 1
-dropout_rate: 0.1
+dropout_rate: 0
 max_gradient_norm: 0.01
 learning_rate: 0.001
 num_heads: 4
