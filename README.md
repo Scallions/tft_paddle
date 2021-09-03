@@ -5,7 +5,7 @@
 ### You can run it on aistudio[https://aistudio.baidu.com/aistudio/projectdetail/2335960]
 
 * Convert TXT files to CSV files
-* We have already provided a csv file dataset so you can skip this step
+* We have already provided a csv file dataset on aistudio so you can skip this step
 
   ``` python
   python scripts/convert_data.py
