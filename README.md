@@ -4,6 +4,10 @@
 
 ### You can run it on [aistudio](https://aistudio.baidu.com/aistudio/projectdetail/2335960)
 
+### You can download the best model we have trained from Baidu Pan
+* 链接：https://pan.baidu.com/s/1XpOY04lt37NlzcEMM3XZEQ 
+* 提取码：zjvu
+
 * Convert TXT files to CSV files
 * We have already provided a csv file [dataset](https://aistudio.baidu.com/aistudio/datasetdetail/106885) on aistudio so you can skip this step
 
