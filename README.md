@@ -8,6 +8,7 @@
 * 链接：https://pan.baidu.com/s/1XpOY04lt37NlzcEMM3XZEQ 
 * 提取码：zjvu
 
+### The training steps
 * Convert TXT files to CSV files
 * We have already provided a csv file [dataset](https://aistudio.baidu.com/aistudio/datasetdetail/106885) on aistudio so you can skip this step
 
