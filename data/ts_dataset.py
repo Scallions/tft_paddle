@@ -14,8 +14,8 @@ class TSDataset(Dataset):
         self.params = cnf.all_params
 
         #self.csv = utils.data_csv_path(cnf.ds_name)
-        self.csv = 'dataset/'
-        self.data = pd.read_csv('dataset/electricity.csv', index_col=0, na_filter=False)
+        self.path = '/home/aistudio/tft_paddle-main/dataset/'
+        self.data = pd.read_csv('/home/aistudio/data/data106885/LD2011_2014.csv', index_col=0, na_filter=False)
 
         self.train_set, self.valid_set, self.test_set = data_formatter.split_data(self.data)
         self.params['column_definition'] = data_formatter.get_column_definition()
