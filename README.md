@@ -40,7 +40,7 @@
   python main.py --exp_name electricity --conf_file_path your_file_path --inference True
   ```
 
-## The experimental results
+### The experimental results
 ![](images/Figure_1.png)
 
 ### The Retrieval results
@@ -53,6 +53,6 @@
 
 
 
-## The reference material
+### The reference material
 - [google-research/tft](https://github.com/google-research/google-research/tree/master/tft)
 - [stevinc/Transformer_Timeseries](https://github.com/stevinc/Transformer_Timeseries)
